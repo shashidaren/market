@@ -127,7 +127,7 @@ def send_test_signal(live_price):
         "atr": 15.0,
         "bar_time": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
         "reasons": [
-            "🧪 THIS IS A TEST SIGNAL from preflight_check.py",
+            "🧪 THIS IS A TEST SIGNAL from the preflight script",
             "NOT a real setup — do not trade",
             "verifies formatting + Telegram delivery end-to-end",
         ],

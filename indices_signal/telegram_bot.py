@@ -88,8 +88,18 @@ def format_message(sig):
 
     for reason in sig["reasons"]:
 
+        # Escape Markdown special chars so a reason string can never
+        # break Telegram's parser (e.g. underscores in filenames).
+        safe_reason = (
+            str(reason)
+            .replace("_", "\\_")
+            .replace("*", "\\*")
+            .replace("[", "\\[")
+            .replace("`", "\\`")
+        )
+
         msg += (
-            f"• {reason}\n"
+            f"• {safe_reason}\n"
         )
 
     msg += """
