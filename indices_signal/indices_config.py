@@ -120,6 +120,10 @@ SIGNAL_CONFIG = {
     # Same direction signals are suppressed for 8 hours.
     # An opposite signal may still be sent.
     "cooldown_hours": 8,
+
+    # Outcome tracking / messaging
+    "signal_expiry_hours": 8,   # staleness hint shown in the message
+    "min_bars_for_stats": 10,   # min resolved signals before showing track record
 }
 
 

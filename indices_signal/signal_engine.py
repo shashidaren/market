@@ -847,10 +847,44 @@ def check_cooldown(
 
 
 # ============================================================
+# SCHEMA ENSURE (outcome-tracking columns)
+# ============================================================
+
+def ensure_schema(db_path=DB_PATH):
+    """Add outcome-tracking columns to signals_sent if missing.
+
+    Safe to call repeatedly; only adds columns that don't exist.
+    Keeps log_signal / outcome_tracker working on databases that
+    were created before these columns were introduced.
+    """
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+    existing = {
+        r[1] for r in cur.execute("PRAGMA table_info(signals_sent)")
+    }
+    for col, coltype in (
+        ("sl", "REAL"),
+        ("tp", "REAL"),
+        ("atr", "REAL"),
+        ("outcome", "TEXT"),
+        ("outcome_price", "REAL"),
+        ("resolved_at", "TEXT"),
+    ):
+        if col not in existing:
+            cur.execute(
+                f"ALTER TABLE signals_sent ADD COLUMN {col} {coltype}"
+            )
+    conn.commit()
+    conn.close()
+
+
+# ============================================================
 # LOG SIGNAL
 # ============================================================
 
 def log_signal(signal):
+
+    ensure_schema()
 
     conn = sqlite3.connect(DB_PATH)
 
@@ -864,9 +898,12 @@ def log_signal(signal):
             signal_type,
             sent_at,
             price,
-            score
+            score,
+            sl,
+            tp,
+            atr
         )
-        VALUES (?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             signal["ticker"],
@@ -876,6 +913,9 @@ def log_signal(signal):
             ).isoformat(),
             signal["price"],
             signal["score"],
+            signal["sl"],
+            signal["tp"],
+            signal["atr"],
         ),
     )
 
@@ -888,6 +928,8 @@ def log_signal(signal):
 # ============================================================
 
 def run():
+
+    ensure_schema()
 
     signals = []
 

@@ -52,9 +52,33 @@ def init_db():
             sent_at TEXT NOT NULL,
             price REAL,
             score REAL,
+            sl REAL,
+            tp REAL,
+            atr REAL,
+            outcome TEXT,
+            outcome_price REAL,
+            resolved_at TEXT,
             PRIMARY KEY (ticker, sent_at)
         )
     """)
+
+    # Migration: add outcome-tracking columns to databases that were
+    # created before these columns existed.
+    existing = {
+        r[1] for r in cur.execute("PRAGMA table_info(signals_sent)")
+    }
+    for col, coltype in (
+        ("sl", "REAL"),
+        ("tp", "REAL"),
+        ("atr", "REAL"),
+        ("outcome", "TEXT"),
+        ("outcome_price", "REAL"),
+        ("resolved_at", "TEXT"),
+    ):
+        if col not in existing:
+            cur.execute(
+                f"ALTER TABLE signals_sent ADD COLUMN {col} {coltype}"
+            )
 
     conn.commit()
     conn.close()
