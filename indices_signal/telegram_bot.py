@@ -1,6 +1,7 @@
 # /opt/market/indices_signal/telegram_bot.py
 
 import logging
+import sqlite3
 
 import requests
 
@@ -9,6 +10,8 @@ from indices_config import (
     TELEGRAM_CHAT_ID,
     MESSAGE_PREFIX,
     TICKERS,
+    SIGNAL_CONFIG,
+    DB_PATH,
 )
 
 from signal_engine import (
@@ -36,6 +39,8 @@ def format_message(sig):
 
     emoji = cfg["emoji"]
 
+    expiry = SIGNAL_CONFIG.get("signal_expiry_hours", 8)
+
     direction = (
         "🟢 BUY"
         if sig["type"] == "BUY"
@@ -58,6 +63,8 @@ def format_message(sig):
         else 0
     )
 
+    stop_pts = abs(sig["price"] - sig["sl"])
+
     bar_time = sig["bar_time"]
 
     msg = f"""
@@ -79,6 +86,8 @@ def format_message(sig):
 📉 RSI: `{sig["rsi"]:.1f}`
 📊 ADX: `{sig["adx"]:.1f}`
 📏 ATR: `{sig["atr"]:.2f}`
+📐 Stop distance: `{stop_pts:.2f}` pts
+💡 Size so the stop risks ≤ 1–2% of your account.
 
 🕯 Completed 4H Candle:
 `{bar_time}`
@@ -102,13 +111,46 @@ def format_message(sig):
             f"• {safe_reason}\n"
         )
 
+    rec = track_record(sig["ticker"])
+    if rec:
+        msg += f"\n📈 Track record: {rec}"
+
     msg += """
 
 ⚠️ Confirm the current XM CFD price before entering.
 ⏰ Strategy: 4H Multi-Timeframe
+⏳ Act within ~{expiry}h of the 4H close; late entries skew risk/reward.
 """
 
     return msg.strip()
+
+
+def track_record(ticker):
+    """Short track-record string from resolved outcomes, or None.
+
+    Returns e.g. "TP 62% (13 resolved)" once enough signals have
+    resolved, so every message shows whether the strategy is working.
+    """
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        min_bars = SIGNAL_CONFIG.get("min_bars_for_stats", 10)
+        total, tp = conn.execute(
+            """
+            SELECT COUNT(*),
+                   SUM(CASE WHEN outcome = 'TP_HIT' THEN 1 ELSE 0 END)
+            FROM signals_sent
+            WHERE ticker = ? AND outcome IS NOT NULL
+            """,
+            (ticker,),
+        ).fetchone()
+        conn.close()
+        if not total or total < min_bars:
+            return None
+        rate = (tp or 0) / total * 100
+        return f"TP {rate:.0f}% ({total} resolved)"
+    except Exception as exc:
+        logger.warning("track_record failed: %s", exc)
+        return None
 
 
 # ============================================================
