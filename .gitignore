@@ -3,6 +3,10 @@
 .env.*
 *.env
 
+# ...but DO commit the templates (safe backup reference, no real values)
+!.env.example
+!*/.env.example
+
 # Python virtual environments
 venv/
 .venv/
