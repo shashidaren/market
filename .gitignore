@@ -1,0 +1,36 @@
+# Environment files (secrets — never commit these)
+.env
+.env.*
+*.env
+
+# Python virtual environments
+venv/
+.venv/
+env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+logs/
+*.log
+
+# Backup / temp files
+*.bak
+*.pybackup
+*.backup
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
