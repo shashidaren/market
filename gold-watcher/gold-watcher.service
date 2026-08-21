@@ -1,0 +1,27 @@
+[Unit]
+Description=Gold Price Watcher — Telegram alerts on sell targets
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/market/gold-watcher
+ExecStart=/usr/bin/python3 /opt/market/gold-watcher/watcher.py
+
+# config.py auto-loads .env, but loading it here too makes env explicit
+EnvironmentFile=-/opt/market/gold-watcher/.env
+
+# Restart if it ever crashes (network blip, Yahoo hiccup, etc.)
+Restart=always
+RestartSec=30
+
+# Don't hammer restarts if something is truly broken
+StartLimitIntervalSec=600
+StartLimitBurst=5
+
+# Logs go to journald (view: journalctl -u gold-watcher -f)
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
