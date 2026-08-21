@@ -12,6 +12,24 @@ execution parameters without touching logic code.
 """
 
 # ------------------------------------------------------------------
+# Auto-load .env (next to this file) so every stage can be run directly:
+#   python3 telegram_bot.py / signal_engine.py / preflight_check.py ...
+# Variables already exported (e.g. by cron / run_pipeline.sh) win —
+# setdefault never overrides an existing environment variable.
+# ------------------------------------------------------------------
+import os as _os
+
+_env_file = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), ".env")
+if _os.path.exists(_env_file):
+    with open(_env_file) as _f:
+        for _line in _f:
+            _line = _line.strip()
+            if _line and not _line.startswith("#") and "=" in _line:
+                _k, _, _v = _line.partition("=")
+                _os.environ.setdefault(_k.strip(), _v.strip())
+
+
+# ------------------------------------------------------------------
 # Exports
 # ------------------------------------------------------------------
 __all__ = [
