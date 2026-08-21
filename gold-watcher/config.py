@@ -34,7 +34,7 @@ def _load_env(path=_os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "
                 line = line.strip()
                 if line and not line.startswith("#") and "=" in line:
                     k, _, v = line.partition("=")
-                    _os.environ.setdefault(k.strip(), v.strip())
+                    _os.environ.setdefault(k.strip(), v.strip().strip('\'"'))
 
 _load_env()
 

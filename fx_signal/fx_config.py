@@ -26,7 +26,7 @@ if _os.path.exists(_env_file):
             _line = _line.strip()
             if _line and not _line.startswith("#") and "=" in _line:
                 _k, _, _v = _line.partition("=")
-                _os.environ.setdefault(_k.strip(), _v.strip())
+                _os.environ.setdefault(_k.strip(), _v.strip().strip('\'"'))
 
 
 # ------------------------------------------------------------------
