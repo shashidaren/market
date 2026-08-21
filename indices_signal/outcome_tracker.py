@@ -45,6 +45,7 @@ def get_open(conn):
         SELECT rowid, ticker, signal_type, price, sl, tp, sent_at
         FROM signals_sent
         WHERE outcome IS NULL
+          AND sl IS NOT NULL
           AND sent_at >= datetime('now', ?)
         ORDER BY sent_at ASC
         """,
@@ -55,6 +56,9 @@ def get_open(conn):
 def resolve(row, conn):
     """Walk stored 4H candles after the signal to find TP/SL first."""
     _rowid, ticker, sig_type, _entry, sl, tp, sent_at = row
+    if sl is None or tp is None:
+        return None
+
     direction = "BUY" if sig_type == "BUY" else "SELL"
 
     candles = conn.execute(
@@ -62,6 +66,7 @@ def resolve(row, conn):
         SELECT high, low, datetime
         FROM prices
         WHERE ticker = ? AND timeframe = ? AND datetime > ?
+          AND high IS NOT NULL AND low IS NOT NULL
         ORDER BY datetime ASC
         """,
         (ticker, PRIMARY_TIMEFRAME, sent_at),
@@ -87,7 +92,7 @@ def expire_old(conn):
         UPDATE signals_sent
         SET outcome = 'EXPIRED', resolved_at = ?
         WHERE outcome IS NULL
-          AND sent_at < datetime('now', ?)
+          AND (sent_at < datetime('now', ?) OR sl IS NULL)
         """,
         (
             datetime.now(timezone.utc).isoformat(),
