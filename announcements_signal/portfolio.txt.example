@@ -1,0 +1,12 @@
+# portfolio.txt — stocks you have BOUGHT / currently hold.
+# Copy this file to portfolio.txt (which stays out of git) and list one
+# Bursa stock code per line. Comments after # are ignored.
+#
+# Insider alerts for these stocks ALWAYS get sent (tagged 📌 HOLDING),
+# bypassing the i_report filter — you want to know about every insider
+# change in stocks you own.
+#
+# Example:
+# 5323          # my main holding
+# 7081
+# 0166          # speculative position

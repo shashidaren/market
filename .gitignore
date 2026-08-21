@@ -7,6 +7,9 @@
 !.env.example
 !*/.env.example
 
+# Personal holdings list (private) — template is portfolio.txt.example
+portfolio.txt
+
 # Python virtual environments
 venv/
 .venv/
