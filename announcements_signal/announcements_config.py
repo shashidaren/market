@@ -13,6 +13,23 @@ Rules are checked in order. First match wins. So put the most specific
 patterns first.
 """
 
+# ------------------------------------------------------------------
+# Auto-load .env (next to this file) so every stage gets Telegram
+# credentials without needing BASH_ENV in cron. Values already in the
+# environment always win (setdefault never overrides).
+# ------------------------------------------------------------------
+import os as _os
+
+_env_file = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), ".env")
+if _os.path.exists(_env_file):
+    with open(_env_file) as _f:
+        for _line in _f:
+            _line = _line.strip()
+            if _line and not _line.startswith("#") and "=" in _line:
+                _k, _, _v = _line.partition("=")
+                _os.environ.setdefault(_k.strip(), _v.strip().strip('\'"'))
+
+
 # Each entry: (regex_pattern, category, subcategory, priority)
 CATEGORY_RULES = [
     # ═══════════════════════════════════════════════════════════════
