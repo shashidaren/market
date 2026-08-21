@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>market // news signal</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap');
+
+  :root {
+    --bg: #0b0e14;
+    --surface: #131722;
+    --surface-hover: #171c29;
+    --border: #232838;
+    --text-primary: #e6e9ef;
+    --text-secondary: #8b93a7;
+    --text-muted: #565f78;
+    --accent: #4fd1c5;
+    --accent-dim: #2a5f5a;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text-primary);
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+  }
+
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 20px 32px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--text-primary);
+  }
+
+  .title span { color: var(--accent); }
+
+  .status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  .pulse {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 0 rgba(79, 209, 197, 0.6);
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(79, 209, 197, 0.5); }
+    70% { box-shadow: 0 0 0 8px rgba(79, 209, 197, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(79, 209, 197, 0); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pulse { animation: none; }
+  }
+
+  main {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 28px 32px 60px;
+  }
+
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 16px;
+  }
+
+  .stat-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 6px;
+  }
+
+  .stat-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .filter-bar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+
+  select {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    padding: 6px 10px;
+    border-radius: 5px;
+  }
+
+  .headline-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .headline {
+    background: var(--surface);
+    padding: 12px 16px;
+    display: flex;
+    gap: 14px;
+    align-items: baseline;
+    text-decoration: none;
+    color: inherit;
+    transition: background 0.12s ease;
+  }
+
+  .headline:hover { background: var(--surface-hover); }
+
+  .h-time {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    width: 46px;
+    flex-shrink: 0;
+  }
+
+  .h-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .h-source {
+    background: var(--accent-dim);
+    color: var(--accent);
+  }
+
+  .h-horizon-immediate { background: #4a1f24; color: #f87171; }
+  .h-horizon-short_term { background: #4a3a1f; color: #fbbf24; }
+  .h-horizon-background { background: var(--surface); color: var(--text-muted); border: 1px solid var(--border); }
+
+  .h-sector {
+    background: #1f2f4a;
+    color: #7dd3fc;
+  }
+
+  /* Sector-specific color coding */
+  .h-sector[data-sector="Banking"]      { background: #1f2f4a; color: #7dd3fc; }
+  .h-sector[data-sector="GLC"]          { background: #4a2f1f; color: #fbbf24; }
+  .h-sector[data-sector="Tech"]         { background: #2f1f4a; color: #c4b5fd; }
+  .h-sector[data-sector="Plantation"]   { background: #1f4a2f; color: #86efac; }
+  .h-sector[data-sector="OilGas"]       { background: #4a1f1f; color: #fca5a5; }
+  .h-sector[data-sector="Construction"] { background: #4a3a1f; color: #fde68a; }
+  .h-sector[data-sector="Telco"]        { background: #1f4a4a; color: #67e8f9; }
+  .h-sector[data-sector="Property"]     { background: #3a1f4a; color: #d8b4fe; }
+  .h-sector[data-sector="REITs"]        { background: #4a1f3a; color: #f9a8d4; }
+  .h-sector[data-sector="Consumer"]     { background: #2f4a1f; color: #a3e635; }
+  .h-sector[data-sector="Healthcare"]   { background: #1f4a3a; color: #6ee7b7; }
+  .h-sector[data-sector="Gloves"]       { background: #4a1f4a; color: #f0abfc; }
+  .h-sector[data-sector="Utilities"]    { background: #4a2f2f; color: #fbcfe8; }
+  .h-sector[data-sector="Aviation"]     { background: #1f3a4a; color: #93c5fd; }
+  .h-sector[data-sector="Auto"]         { background: #3a4a1f; color: #d9f99d; }
+  .h-sector[data-sector="Materials"]    { background: #4a2f3a; color: #fbb6ce; }
+  .h-sector[data-sector="Insurance"]    { background: #2f2f4a; color: #a5b4fc; }
+  .h-sector[data-sector="Industrial"]   { background: #4a3a2f; color: #fed7aa; }
+  .h-sector[data-sector="Transport"]    { background: #2f4a3a; color: #99f6e4; }
+  .h-sector[data-sector="Financial"]    { background: #3a2f4a; color: #ddd6fe; }
+  .h-sector[data-sector="Macro"]        { background: #3a3a3a; color: #d1d5db; }
+
+  .h-sentiment {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 600;
+    width: 48px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  .sent-pos { color: #4ade80; }
+  .sent-neg { color: #f87171; }
+  .sent-neutral { color: var(--text-muted); }
+
+  .h-title {
+    font-size: 13.5px;
+    color: var(--text-primary);
+    line-height: 1.4;
+    flex: 1;
+  }
+
+  .h-title .noise-title { color: var(--text-muted); }
+
+  .headline.is-noise { opacity: 0.55; }
+
+  .h-sources-count {
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="title">market<span>//</span>news-signal</div>
+  <div class="nav" style="display:flex;gap:4px;font-family:'JetBrains Mono',monospace;font-size:12px;">
+    <a href="/" style="color:#4fd1c5;background:#2a5f5a;text-decoration:none;padding:6px 12px;border-radius:4px;">news</a>
+    <a href="/insider" style="color:#8b93a7;text-decoration:none;padding:6px 12px;border-radius:4px;">insider</a>
+  </div>
+  <div class="status">
+    <span class="pulse"></span>
+    <span id="last-collected">connecting...</span>
+  </div>
+</header>
+
+
+<main>
+  <div class="stats-row" id="stats-row"></div>
+
+  <div class="filter-bar">
+    <select id="source-filter">
+      <option value="">all sources</option>
+    </select>
+    <select id="relevance-filter">
+      <option value="">all relevance</option>
+      <option value="malaysia_direct">malaysia direct</option>
+      <option value="macro_indirect">macro indirect</option>
+      <option value="noise">noise</option>
+    </select>
+    <select id="sector-filter">
+      <option value="">all sectors</option>
+    </select>
+    <select id="horizon-filter">
+      <option value="">all horizons</option>
+      <option value="immediate">immediate</option>
+      <option value="short_term">short term</option>
+      <option value="background">background</option>
+    </select>
+  </div>
+
+  <div class="headline-list" id="headline-list">
+    <div class="empty-state">loading headlines...</div>
+  </div>
+</main>
+
+<script>
+let allHeadlines = [];
+
+// XSS-safe HTML escaping for user/feed content
+function esc(s) {
+  if (s === null || s === undefined) return '';
+  return String(s).replace(/[<>&"']/g, c => ({
+    '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;'
+  })[c]);
+}
+
+function timeAgo(isoString) {
+  if (!isoString) return '--';
+  const diff = (Date.now() - new Date(isoString).getTime()) / 1000;
+  if (diff < 60) return 'now';
+  if (diff < 3600) return Math.floor(diff / 60) + 'm';
+  if (diff < 86400) return Math.floor(diff / 3600) + 'h';
+  return Math.floor(diff / 86400) + 'd';
+}
+
+function sentimentClass(s) {
+  if (s === null || s === undefined) return 'sent-neutral';
+  if (s > 0.15) return 'sent-pos';
+  if (s < -0.15) return 'sent-neg';
+  return 'sent-neutral';
+}
+
+function sentimentLabel(s) {
+  if (s === null || s === undefined) return '--';
+  return (s > 0 ? '+' : '') + s.toFixed(2);
+}
+
+function horizonClass(h) {
+  if (h === 'immediate') return 'h-horizon-immediate';
+  if (h === 'short_term') return 'h-horizon-short_term';
+  return 'h-horizon-background';
+}
+
+function currentFilters() {
+  return {
+    source: document.getElementById('source-filter').value,
+    relevance: document.getElementById('relevance-filter').value,
+    sector: document.getElementById('sector-filter').value,
+    horizon: document.getElementById('horizon-filter').value,
+  };
+}
+
+function render() {
+  const { source, relevance, sector, horizon } = currentFilters();
+  const list = document.getElementById('headline-list');
+
+  let filtered = allHeadlines;
+  if (source) filtered = filtered.filter(h => h.source === source);
+  if (relevance) filtered = filtered.filter(h => h.relevance === relevance);
+  if (sector) filtered = filtered.filter(h => h.sector === sector);
+  if (horizon) filtered = filtered.filter(h => h.impact_horizon === horizon);
+
+  if (filtered.length === 0) {
+    list.innerHTML = '<div class="empty-state">no headlines match these filters</div>';
+    return;
+  }
+
+  list.innerHTML = filtered.map(h => {
+    const isNoise = h.relevance === 'noise';
+    const isUnscored = !h.relevance;
+    return `
+    <a class="headline ${isNoise ? 'is-noise' : ''}" href="${esc(h.url)}" target="_blank" rel="noopener">
+      <span class="h-time">${timeAgo(h.published_at || h.collected_at)}</span>
+      ${h.impact_horizon ? `<span class="h-tag ${horizonClass(h.impact_horizon)}">${esc(h.impact_horizon.replace('_', ' '))}</span>` : ''}
+      ${h.sector ? `<span class="h-tag h-sector" data-sector="${esc(h.sector)}">${esc(h.sector)}</span>` : ''}
+      <span class="h-tag h-source">${esc(h.source)}</span>
+      <span class="h-sentiment ${sentimentClass(h.sentiment)}">${isUnscored ? 'pending' : sentimentLabel(h.sentiment)}</span>
+      <span class="h-title">${esc(h.title)}</span>
+      ${h.source_count > 1 ? `<span class="h-sources-count">${h.source_count} sources</span>` : ''}
+    </a>
+  `;
+  }).join('');
+}
+
+async function loadStats() {
+  const res = await fetch('/api/stats');
+  const data = await res.json();
+
+  const lastScoredText = data.last_scored ? ', scored ' + timeAgo(data.last_scored) + ' ago' : '';
+  document.getElementById('last-collected').textContent =
+    data.last_collected ? 'last collected ' + timeAgo(data.last_collected) + ' ago' + lastScoredText : 'no data';
+
+  const statsRow = document.getElementById('stats-row');
+  statsRow.innerHTML = `
+    <div class="stat-card">
+      <div class="stat-label">total headlines</div>
+      <div class="stat-value">${data.total}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">malaysia direct</div>
+      <div class="stat-value">${data.malaysia_direct_count}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">avg sentiment</div>
+      <div class="stat-value ${sentimentClass(data.avg_sentiment)}">${data.avg_sentiment !== null ? sentimentLabel(data.avg_sentiment) : '--'}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">filtered as noise</div>
+      <div class="stat-value" style="color: var(--text-muted)">${data.noise_count}</div>
+    </div>
+    ${data.by_source.map(s => `
+      <div class="stat-card">
+        <div class="stat-label">${esc(s.source)}</div>
+        <div class="stat-value">${s.count}</div>
+      </div>
+    `).join('')}
+  `;
+
+  const sourceFilter = document.getElementById('source-filter');
+  const current = sourceFilter.value;
+  sourceFilter.innerHTML = '<option value="">all sources</option>' +
+    data.by_source.map(s => `<option value="${esc(s.source)}">${esc(s.source)}</option>`).join('');
+  sourceFilter.value = current;
+}
+
+async function loadSectors() {
+  const res = await fetch('/api/sectors');
+  const sectors = await res.json();
+  const sectorFilter = document.getElementById('sector-filter');
+  const current = sectorFilter.value;
+  sectorFilter.innerHTML = '<option value="">all sectors</option>' +
+    sectors.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
+  sectorFilter.value = current;
+}
+
+async function loadHeadlines() {
+  const res = await fetch('/api/headlines');
+  allHeadlines = await res.json();
+  render();
+}
+
+['source-filter', 'relevance-filter', 'sector-filter', 'horizon-filter'].forEach(id => {
+  document.getElementById(id).addEventListener('change', render);
+});
+
+async function refresh() {
+  await Promise.all([loadStats(), loadSectors(), loadHeadlines()]);
+}
+
+refresh();
+setInterval(refresh, 60000);
+</script>
+
+</body>
+</html>

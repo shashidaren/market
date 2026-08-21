@@ -1,0 +1,55 @@
+
+══════════════════════════════════════════════
+INTELLIGENCE REPORT
+══════════════════════════════════════════════
+
+Symbol: 5323
+Generated: 2026-08-21 06:04:48
+
+CURRENT MARKET
+──────────────────────────────────────────────
+Price: RM1.9500
+
+Previous Close:
+1.8799999952316284
+
+Change:
+3.72%
+
+ANALYSIS SCORES
+──────────────────────────────────────────────
+Technical: 73/100
+Volume:    40/100
+Risk:      30/100
+
+FINAL SCORE
+──────────────────────────────────────────────
+54.0/100
+
+DECISION
+──────────────────────────────────────────────
+NEUTRAL
+
+Confidence: 54%
+
+SUPPORT / RESISTANCE
+──────────────────────────────────────────────
+Support:    1.94
+Resistance: 1.96
+
+ANALYSIS
+──────────────────────────────────────────────
+
+TECHNICAL:
+RSI in healthy momentum zone; Price above SMA50; Price above SMA200; MACD bearish
+
+VOLUME:
+Weak volume participation
+
+RISK:
+Risk/reward ratio: 1.00
+
+WARNINGS:
+⚠ Risk/reward is unattractive
+
+══════════════════════════════════════════════

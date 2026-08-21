@@ -1,0 +1,84 @@
+
+══════════════════════════════════════════════
+INTELLIGENCE REPORT
+══════════════════════════════════════════════
+
+Symbol: 5323
+Generated: 2026-08-21 06:44:33
+
+CURRENT MARKET
+──────────────────────────────────────────────
+Price: RM1.9500
+
+Previous Close:
+1.8799999952316284
+
+Change:
+3.72%
+
+ANALYSIS SCORES
+──────────────────────────────────────────────
+Technical: 73/100
+Volume:    40/100
+Risk:      30/100
+
+FINAL SCORE
+──────────────────────────────────────────────
+54.0/100
+
+DECISION
+──────────────────────────────────────────────
+WAIT_FOR_PULLBACK
+
+Confidence: 54%
+
+TRADE LEVELS
+──────────────────────────────────────────────
+Trade Support:    RM1.7800
+Trade Resistance: RM2.0200
+
+MAJOR STRUCTURE
+──────────────────────────────────────────────
+Major Support:    RM1.7800
+Major Resistance: RM2.0967
+
+VOLATILITY
+──────────────────────────────────────────────
+ATR:                 RM0.0700
+Average Daily Range: RM0.0671
+
+TRADE SETUP
+──────────────────────────────────────────────
+Entry Reference:   RM1.9500
+Stop Reference:    RM1.7800
+Target 1:          RM2.0200
+Target 2:          RM2.0967
+
+Risk:              RM0.1700
+Risk Percentage:   8.72%
+
+Reward Target 1:   RM0.0700
+Reward 1 Percent:  3.59%
+
+Reward Target 2:   RM0.1467
+Reward 2 Percent:  7.52%
+
+Risk/Reward T1:    0.41
+Risk/Reward T2:    0.86
+
+ANALYSIS
+──────────────────────────────────────────────
+
+TECHNICAL:
+RSI in healthy momentum zone; Price above SMA50; Price above SMA200; MACD bearish
+
+VOLUME:
+Weak volume participation
+
+RISK:
+Risk/reward ratio: 0.41
+
+WARNINGS:
+⚠ Risk/reward is unattractive
+
+══════════════════════════════════════════════

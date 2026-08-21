@@ -1,0 +1,118 @@
+
+══════════════════════════════════════════════
+INTELLIGENCE REPORT
+══════════════════════════════════════════════
+
+Symbol: 7081
+Generated: 2026-08-21 06:59:31
+
+CURRENT MARKET
+──────────────────────────────────────────────
+Price: RM1.1900
+
+Previous Close:
+1.190000057220459
+
+Change:
+0.00%
+
+ANALYSIS SCORES
+──────────────────────────────────────────────
+Technical: 83/100
+Volume:    40/100
+Risk:      75/100
+
+FINAL SCORE
+──────────────────────────────────────────────
+70.25/100
+
+DECISION
+──────────────────────────────────────────────
+BUY
+
+Confidence: 70%
+
+TRADE LEVELS
+──────────────────────────────────────────────
+Trade Support:    RM1.1750
+Trade Resistance: RM1.2250
+
+MAJOR STRUCTURE
+──────────────────────────────────────────────
+Major Support:    RM1.1200
+Major Resistance: RM1.2500
+
+VOLATILITY
+──────────────────────────────────────────────
+ATR:                 RM0.0257
+Average Daily Range: RM0.0250
+
+CURRENT TRADE SETUP
+──────────────────────────────────────────────
+Entry Reference:   RM1.1900
+Stop Reference:    RM1.1750
+Target 1:          RM1.2250
+Target 2:          RM1.2500
+
+Risk:              RM0.0150
+Risk Percentage:   1.26%
+
+Reward Target 1:   RM0.0350
+Reward 1 Percent:  2.94%
+
+Reward Target 2:   RM0.0600
+Reward 2 Percent:  5.04%
+
+Risk/Reward T1:    2.33
+Risk/Reward T2:    4.00
+
+PULLBACK PLAN
+──────────────────────────────────────────────
+Preferred Entry Zone:
+RM1.1750 - RM1.1879
+
+Current Price:
+RM1.1900
+
+Distance to Entry:
+0.18%
+
+Invalidation:
+RM1.1493
+
+PULLBACK TRADE SETUP
+──────────────────────────────────────────────
+Entry Reference:   RM1.1879
+Stop Reference:    RM1.1493
+
+Target 1:          RM1.2250
+Target 2:          RM1.2500
+
+Risk:              RM0.0386
+Risk Percentage:   3.25%
+
+Reward Target 1:   RM0.0372
+Reward 1 Percent:  3.13%
+
+Reward Target 2:   RM0.0621
+Reward 2 Percent:  5.23%
+
+Risk/Reward T1:    0.96
+Risk/Reward T2:    1.61
+
+ANALYSIS
+──────────────────────────────────────────────
+
+TECHNICAL:
+RSI in healthy momentum zone; Price above SMA20; Price above SMA50; MACD bullish
+
+VOLUME:
+Weak volume participation
+
+RISK:
+Risk/reward ratio: 2.33
+
+WARNINGS:
+None
+
+══════════════════════════════════════════════

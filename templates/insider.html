@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>market // insider signal</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap');
+
+  :root {
+    --bg: #0b0e14;
+    --surface: #131722;
+    --surface-hover: #171c29;
+    --border: #232838;
+    --text-primary: #e6e9ef;
+    --text-secondary: #8b93a7;
+    --text-muted: #565f78;
+    --accent: #4fd1c5;
+    --accent-dim: #2a5f5a;
+    --buy: #4ade80;
+    --sell: #f87171;
+    --mega: #fbbf24;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text-primary);
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+  }
+
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 20px 32px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--text-primary);
+  }
+  .title span { color: var(--accent); }
+
+  .nav {
+    display: flex;
+    gap: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+  }
+  .nav a {
+    color: var(--text-secondary);
+    text-decoration: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    transition: all 0.12s;
+  }
+  .nav a:hover { color: var(--text-primary); background: var(--surface); }
+  .nav a.active { color: var(--accent); background: var(--accent-dim); }
+
+  .status {
+    display: flex; align-items: center; gap: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+  .pulse {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--accent);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(79, 209, 197, 0.5); }
+    70% { box-shadow: 0 0 0 8px rgba(79, 209, 197, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(79, 209, 197, 0); }
+  }
+
+  main {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 28px 32px 60px;
+  }
+
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 16px;
+  }
+  .stat-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 6px;
+  }
+  .stat-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 20px;
+    font-weight: 600;
+  }
+  .stat-mega  { color: var(--mega); }
+  .stat-strong { color: var(--accent); }
+
+  .filter-bar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  select, input[type="text"] {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    padding: 6px 10px;
+    border-radius: 5px;
+  }
+  input[type="text"] {
+    font-family: 'JetBrains Mono', monospace;
+    width: 140px;
+  }
+
+  /* ── Signal table ─────────────────────────────────── */
+  .signal-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .signal-row {
+    background: var(--surface);
+    padding: 12px 16px;
+    display: grid;
+    grid-template-columns: 55px 90px 1fr 90px 110px 140px 60px;
+    gap: 12px;
+    align-items: center;
+    cursor: pointer;
+    transition: background 0.12s;
+  }
+  .signal-row:hover { background: var(--surface-hover); }
+  .signal-row.expanded { background: var(--surface-hover); }
+
+  .s-score {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    font-weight: 600;
+    text-align: center;
+    padding: 4px 8px;
+    border-radius: 4px;
+  }
+  .score-mega   { background: #4a3a1f; color: var(--mega); }
+  .score-strong { background: var(--accent-dim); color: var(--accent); }
+  .score-med    { background: var(--surface); color: var(--text-secondary); border: 1px solid var(--border); }
+
+  .s-code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent);
+  }
+  .s-company {
+    font-size: 13.5px;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .s-days {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--text-secondary);
+    text-align: center;
+  }
+  .s-net {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 600;
+    text-align: right;
+  }
+  .net-buy  { color: var(--buy); }
+  .net-sell { color: var(--sell); }
+  .net-none { color: var(--text-muted); }
+
+  .s-date {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-muted);
+    text-align: center;
+  }
+  .s-arrow {
+    color: var(--text-muted);
+    font-size: 14px;
+    text-align: center;
+    transition: transform 0.15s;
+  }
+  .signal-row.expanded .s-arrow { transform: rotate(90deg); }
+
+  /* ── Detail panel ─────────────────────────────────── */
+  .detail-panel {
+    background: var(--bg);
+    padding: 20px 24px;
+    border-top: 2px solid var(--accent-dim);
+    display: none;
+  }
+  .signal-row.expanded + .detail-panel { display: block; }
+
+  .detail-section {
+    margin-bottom: 20px;
+  }
+  .detail-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+  .trade-table, .ownership-table {
+    width: 100%;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    border-collapse: collapse;
+  }
+  .trade-table th, .ownership-table th {
+    color: var(--text-muted);
+    font-weight: 500;
+    text-align: left;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .trade-table td, .ownership-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-primary);
+  }
+  .trade-table .num, .ownership-table .num {
+    text-align: right;
+  }
+  .tx-buy  { color: var(--buy); font-weight: 600; }
+  .tx-sell { color: var(--sell); font-weight: 600; }
+
+  .filing-tag {
+    display: inline-block;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 10px;
+    background: var(--surface);
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    margin-left: 4px;
+  }
+  .tag-D { color: var(--accent); border-color: var(--accent-dim); }
+  .tag-S { color: #fbbf24; border-color: #4a3a1f; }
+
+  .bursa-link {
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 12px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--accent-dim);
+    display: inline-block;
+  }
+  .bursa-link:hover { background: var(--accent-dim); }
+
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+  }
+
+  /* Column headers */
+  .signal-header {
+    background: var(--bg);
+    padding: 8px 16px;
+    display: grid;
+    grid-template-columns: 55px 90px 1fr 90px 110px 140px 60px;
+    gap: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    border: 1px solid var(--border);
+    border-bottom: none;
+    border-radius: 8px 8px 0 0;
+  }
+  .signal-header .num-h { text-align: right; }
+  .signal-header .center-h { text-align: center; }
+
+  @media (max-width: 800px) {
+    .signal-row, .signal-header {
+      grid-template-columns: 45px 70px 1fr 100px;
+      font-size: 12px;
+    }
+    .col-days, .col-date, .col-arrow { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="title">market<span>//</span>insider-signal</div>
+  <div class="nav">
+    <a href="/">news</a>
+    <a href="/insider" class="active">insider</a>
+  </div>
+  <div class="status">
+    <span class="pulse"></span>
+    <span id="last-updated">connecting...</span>
+  </div>
+</header>
+
+<main>
+  <div class="stats-row" id="stats-row"></div>
+
+  <div class="filter-bar">
+    <select id="score-filter">
+      <option value="0">all signals</option>
+      <option value="7" selected>score ≥ 7 (strong)</option>
+      <option value="10">score ≥ 10 (mega)</option>
+    </select>
+    <select id="direction-filter">
+      <option value="">all directions</option>
+      <option value="buy">net buying</option>
+      <option value="sell">net selling</option>
+    </select>
+    <input type="text" id="search-filter" placeholder="stock code...">
+  </div>
+
+  <div class="signal-header">
+    <span class="center-h">score</span>
+    <span>code</span>
+    <span>company</span>
+    <span class="center-h col-days">days</span>
+    <span class="num-h">net shares</span>
+    <span class="center-h col-date">last filing</span>
+    <span class="center-h col-arrow"></span>
+  </div>
+  <div class="signal-list" id="signal-list">
+    <div class="empty-state">loading signals...</div>
+  </div>
+</main>
+
+<script>
+let allSignals = [];
+let expandedStock = null;
+
+function esc(s) {
+  if (s === null || s === undefined) return '';
+  return String(s).replace(/[<>&"']/g, c => ({
+    '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;'
+  })[c]);
+}
+
+function timeAgo(iso) {
+  if (!iso) return '--';
+  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (diff < 60) return 'now';
+  if (diff < 3600) return Math.floor(diff/60) + 'm ago';
+  if (diff < 86400) return Math.floor(diff/3600) + 'h ago';
+  return Math.floor(diff/86400) + 'd ago';
+}
+
+function fmtInt(n) {
+  if (n === null || n === undefined || n === 0) return '-';
+  return Math.abs(n) >= 1000000
+    ? (n/1000000).toFixed(1).replace(/\.0$/, '') + 'M'
+    : Math.abs(n) >= 1000
+      ? (n/1000).toFixed(0) + 'K'
+      : n.toString();
+}
+
+function fmtIntFull(n) {
+  if (n === null || n === undefined) return '-';
+  return n.toLocaleString();
+}
+
+function fmtPct(p) {
+  if (p === null || p === undefined || p === 0) return '-';
+  return p.toFixed(2) + '%';
+}
+
+function scoreClass(s) {
+  if (s >= 10) return 'score-mega';
+  if (s >= 7) return 'score-strong';
+  return 'score-med';
+}
+
+function netClass(n) {
+  if (n > 0) return 'net-buy';
+  if (n < 0) return 'net-sell';
+  return 'net-none';
+}
+
+function netLabel(n) {
+  if (!n) return '-';
+  const sign = n > 0 ? '+' : '';
+  return sign + fmtInt(n);
+}
+
+function fmtDate(d) {
+  if (!d) return '-';
+  return d.substring(5); // MM-DD
+}
+
+async function loadStats() {
+  const res = await fetch('/api/insider/stats');
+  const data = await res.json();
+
+  document.getElementById('last-updated').textContent =
+    data.last_updated ? 'parsed ' + timeAgo(data.last_updated) : 'no data';
+
+  document.getElementById('stats-row').innerHTML = `
+    <div class="stat-card">
+      <div class="stat-label">tracked (7d)</div>
+      <div class="stat-value">${data.total_stocks}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">mega signals</div>
+      <div class="stat-value stat-mega">${data.mega_signals}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">strong signals</div>
+      <div class="stat-value stat-strong">${data.strong_signals}</div>
+    </div>
+  `;
+}
+
+function render() {
+  const minScore = parseInt(document.getElementById('score-filter').value);
+  const direction = document.getElementById('direction-filter').value;
+  const search = document.getElementById('search-filter').value.trim().toUpperCase();
+
+  let filtered = allSignals.filter(s => s.score >= minScore);
+  if (direction === 'buy') filtered = filtered.filter(s => s.net_shares > 0);
+  if (direction === 'sell') filtered = filtered.filter(s => s.net_shares < 0);
+  if (search) filtered = filtered.filter(s =>
+    s.stock_code.toUpperCase().includes(search) ||
+    (s.company_name || '').toUpperCase().includes(search)
+  );
+
+  const list = document.getElementById('signal-list');
+  if (filtered.length === 0) {
+    list.innerHTML = '<div class="empty-state">no signals match these filters</div>';
+    return;
+  }
+
+  list.innerHTML = filtered.map(s => `
+    <div class="signal-row" data-stock="${esc(s.stock_code)}" onclick="toggleDetail('${esc(s.stock_code)}')">
+      <span class="s-score ${scoreClass(s.score)}">${s.score}</span>
+      <span class="s-code">${esc(s.stock_code)}</span>
+      <span class="s-company">${esc(s.company_name || '')}</span>
+      <span class="s-days col-days">${s.active_days}d</span>
+      <span class="s-net ${netClass(s.net_shares)}">${netLabel(s.net_shares)}</span>
+      <span class="s-date col-date">${fmtDate(s.last_date)}</span>
+      <span class="s-arrow col-arrow">▸</span>
+    </div>
+    <div class="detail-panel" id="detail-${esc(s.stock_code)}"></div>
+  `).join('');
+
+  // Re-open expanded row after re-render
+  if (expandedStock) {
+    const row = document.querySelector(`[data-stock="${expandedStock}"]`);
+    if (row) {
+      row.classList.add('expanded');
+      loadDetail(expandedStock);
+    }
+  }
+}
+
+async function toggleDetail(stockCode) {
+  const rows = document.querySelectorAll('.signal-row');
+  const target = document.querySelector(`[data-stock="${stockCode}"]`);
+  if (!target) return;
+
+  if (target.classList.contains('expanded')) {
+    target.classList.remove('expanded');
+    expandedStock = null;
+    return;
+  }
+
+  // Collapse others
+  rows.forEach(r => r.classList.remove('expanded'));
+  target.classList.add('expanded');
+  expandedStock = stockCode;
+
+  await loadDetail(stockCode);
+}
+
+async function loadDetail(stockCode) {
+  const panel = document.getElementById(`detail-${stockCode}`);
+  if (!panel) return;
+  panel.innerHTML = '<div class="empty-state">loading...</div>';
+
+  const res = await fetch(`/api/insider/stock/${stockCode}`);
+  const data = await res.json();
+
+  const bursaUrl = `https://www.bursamalaysia.com/trade/trading_resources/listed_securities/listed_securities_search?stock_code=${stockCode}`;
+
+  panel.innerHTML = `
+    <div class="detail-section">
+      <div class="detail-title">recent transactions (last 100)</div>
+      <table class="trade-table">
+        <thead>
+          <tr>
+            <th>date</th>
+            <th>person</th>
+            <th>type</th>
+            <th>nature</th>
+            <th class="num">shares</th>
+            <th class="num">price</th>
+            <th class="num">after (units)</th>
+            <th class="num">after (%)</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${data.trades.map(t => {
+            const isBuy = t.transaction_type === 'ACQUISITION';
+            const tag = t.subcategory === 'DIRECTOR_S219' ? 'D' : 'S';
+            const totalUnits = (t.direct_units_after || 0) + (t.indirect_units_after || 0);
+            const totalPct = (t.direct_pct_after || 0) + (t.indirect_pct_after || 0);
+            return `
+              <tr>
+                <td>${esc(t.published_date)}</td>
+                <td>${esc(t.person_name || '?')}<span class="filing-tag tag-${tag}">${tag}</span></td>
+                <td class="${isBuy ? 'tx-buy' : 'tx-sell'}">${isBuy ? '↑ BUY' : '↓ SELL'}</td>
+                <td>${esc(t.nature_of_interest || '-')}</td>
+                <td class="num">${fmtIntFull(t.shares_transacted)}</td>
+                <td class="num">${esc(t.consideration || '-')}</td>
+                <td class="num">${fmtIntFull(totalUnits) !== '-' ? fmtIntFull(totalUnits) : '-'}</td>
+                <td class="num">${fmtPct(totalPct)}</td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    ${data.ownership.length ? `
+      <div class="detail-section">
+        <div class="detail-title">current insider ownership</div>
+        <table class="ownership-table">
+          <thead>
+            <tr>
+              <th>person / entity</th>
+              <th class="num">direct %</th>
+              <th class="num">indirect %</th>
+              <th class="num">total %</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${data.ownership.map(o => `
+              <tr>
+                <td>${esc(o.person_name)}</td>
+                <td class="num">${fmtPct(o.direct_pct)}</td>
+                <td class="num">${fmtPct(o.indirect_pct)}</td>
+                <td class="num"><b>${fmtPct(o.total_pct)}</b></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    ` : ''}
+
+    <div>
+      <a class="bursa-link" href="${bursaUrl}" target="_blank" rel="noopener">→ view on bursa</a>
+    </div>
+  `;
+}
+
+async function loadSignals() {
+  const res = await fetch('/api/insider/signals');
+  allSignals = await res.json();
+  render();
+}
+
+['score-filter', 'direction-filter'].forEach(id => {
+  document.getElementById(id).addEventListener('change', render);
+});
+document.getElementById('search-filter').addEventListener('input', render);
+
+async function refresh() {
+  await Promise.all([loadStats(), loadSignals()]);
+}
+
+refresh();
+setInterval(refresh, 60000);
+</script>
+
+</body>
+</html>

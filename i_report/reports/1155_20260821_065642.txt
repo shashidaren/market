@@ -1,0 +1,118 @@
+
+══════════════════════════════════════════════
+INTELLIGENCE REPORT
+══════════════════════════════════════════════
+
+Symbol: 1155
+Generated: 2026-08-21 06:56:42
+
+CURRENT MARKET
+──────────────────────────────────────────────
+Price: RM10.6200
+
+Previous Close:
+10.579999923706055
+
+Change:
+0.38%
+
+ANALYSIS SCORES
+──────────────────────────────────────────────
+Technical: 45/100
+Volume:    40/100
+Risk:      75/100
+
+FINAL SCORE
+──────────────────────────────────────────────
+51.25/100
+
+DECISION
+──────────────────────────────────────────────
+NEUTRAL
+
+Confidence: 51%
+
+TRADE LEVELS
+──────────────────────────────────────────────
+Trade Support:    RM10.5200
+Trade Resistance: RM10.8400
+
+MAJOR STRUCTURE
+──────────────────────────────────────────────
+Major Support:    RM10.3200
+Major Resistance: RM10.8400
+
+VOLATILITY
+──────────────────────────────────────────────
+ATR:                 RM0.1000
+Average Daily Range: RM0.1000
+
+CURRENT TRADE SETUP
+──────────────────────────────────────────────
+Entry Reference:   RM10.6200
+Stop Reference:    RM10.5200
+Target 1:          RM10.8400
+Target 2:          RM10.8400
+
+Risk:              RM0.1000
+Risk Percentage:   0.94%
+
+Reward Target 1:   RM0.2200
+Reward 1 Percent:  2.07%
+
+Reward Target 2:   RM0.2200
+Reward 2 Percent:  2.07%
+
+Risk/Reward T1:    2.20
+Risk/Reward T2:    2.20
+
+PULLBACK PLAN
+──────────────────────────────────────────────
+Preferred Entry Zone:
+RM10.5200 - RM10.5700
+
+Current Price:
+RM10.6200
+
+Distance to Entry:
+0.47%
+
+Invalidation:
+RM10.4200
+
+PULLBACK TRADE SETUP
+──────────────────────────────────────────────
+Entry Reference:   RM10.5700
+Stop Reference:    RM10.4200
+
+Target 1:          RM10.8400
+Target 2:          RM10.8400
+
+Risk:              RM0.1500
+Risk Percentage:   1.42%
+
+Reward Target 1:   RM0.2700
+Reward 1 Percent:  2.55%
+
+Reward Target 2:   RM0.2700
+Reward 2 Percent:  2.55%
+
+Risk/Reward T1:    1.80
+Risk/Reward T2:    1.80
+
+ANALYSIS
+──────────────────────────────────────────────
+
+TECHNICAL:
+MACD bearish
+
+VOLUME:
+Weak volume participation
+
+RISK:
+Risk/reward ratio: 2.20
+
+WARNINGS:
+None
+
+══════════════════════════════════════════════

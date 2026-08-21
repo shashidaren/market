@@ -1,0 +1,5 @@
+feedparser==6.0.14
+flask==3.0.3
+rapidfuzz==3.9.6
+transformers==4.44.2
+torch==2.4.1
