@@ -2,6 +2,21 @@
 
 import os
 
+# ------------------------------------------------------------------
+# Auto-load .env (next to this file) so every stage can be run
+# directly without manually exporting variables. Values already in
+# the environment (cron / run_pipeline.sh) always win.
+# ------------------------------------------------------------------
+_env_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+if os.path.exists(_env_file):
+    with open(_env_file) as _f:
+        for _line in _f:
+            _line = _line.strip()
+            if _line and not _line.startswith("#") and "=" in _line:
+                _k, _, _v = _line.partition("=")
+                os.environ.setdefault(_k.strip(), _v.strip())
+
+
 # ============================================================
 # INSTRUMENT CONFIGURATION
 # ============================================================

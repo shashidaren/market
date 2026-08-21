@@ -23,6 +23,9 @@ __pycache__/
 # Databases
 *.db
 *.db.old
+*.db-shm
+*.db-wal
+*.db-journal
 *.sqlite
 *.sqlite3
 
