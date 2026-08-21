@@ -127,6 +127,24 @@ def check_db():
     con.close()
 
 
+def check_ireport():
+    """Verify the i_report filter is operational (not just failing open)."""
+    enabled = os.environ.get("IREPORT_FILTER", "on").lower() not in ("off", "0", "false", "no")
+    if not enabled:
+        print(f"{WARN} i_report filter — DISABLED via IREPORT_FILTER=off (all alerts pass)")
+        return
+    try:
+        import ireport_filter
+        ok = ireport_filter._load_engine()
+        report(ok, "i_report filter engine",
+               "loaded" if ok else f"unavailable ({ireport_filter._load_error}) — "
+               "alerts will FAIL OPEN (sent unfiltered). pip install pandas-ta-classic")
+        pf = ireport_filter.load_portfolio()
+        print(f"{OK} portfolio.txt — {len(pf)} holding(s): {sorted(pf) if pf else '(none — see portfolio.txt.example)'}")
+    except Exception as e:
+        report(False, "i_report filter", str(e))
+
+
 def send_test():
     from telegram_bot import send_telegram_message
     token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
@@ -153,6 +171,7 @@ if __name__ == "__main__":
     check_bursa()
     check_telegram()
     check_db()
+    check_ireport()
     if args.send_test:
         send_test()
     print("─" * 60)

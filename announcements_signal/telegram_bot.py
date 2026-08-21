@@ -37,9 +37,17 @@ import requests
 
 from collector import DB_PATH
 from price_context import get_price_context, format_price_block
+from ireport_filter import analyze_stock, load_portfolio, ALLOWED_DECISIONS
 
 TELEGRAM_API_BASE = "https://api.telegram.org"
 REQUEST_TIMEOUT   = 10
+
+# ── i_report filter ────────────────────────────────────────
+# Set IREPORT_FILTER=off in .env to disable filtering entirely.
+# Stocks listed in portfolio.txt always alert (📌 HOLDING).
+IREPORT_FILTER_ENABLED = os.environ.get(
+    "IREPORT_FILTER", "on").lower() not in ("off", "0", "false", "no")
+PORTFOLIO = load_portfolio()
 
 # Score tiers for display (must align with signals_engine.py thresholds)
 MEGA_SIGNAL_SCORE   = 10
@@ -570,6 +578,43 @@ def main() -> None:
                 )
                 conn.commit()
                 continue
+
+            # ── i_report FILTER ─────────────────────────────────
+            # Portfolio stocks always alert (you own them — you want
+            # to know about every insider change). Everything else
+            # must earn an actionable i_report decision. Fail-open:
+            # if analysis is unavailable, the alert still goes out.
+            in_portfolio = stock_code.upper() in PORTFOLIO
+
+            analysis = None
+            if IREPORT_FILTER_ENABLED:
+                analysis = analyze_stock(stock_code)
+
+            if in_portfolio:
+                message = "📌 <b>HOLDING</b> — you own this stock\n" + message
+            elif IREPORT_FILTER_ENABLED and analysis is not None \
+                    and analysis["decision"] not in ALLOWED_DECISIONS:
+                log.info(
+                    "🔇 i_report filtered %s: score=%s decision=%s. Marking delivered.",
+                    stock_code, analysis["score"], analysis["decision"],
+                )
+                mark_delivered_all_for_stock(
+                    conn,
+                    stock_code,
+                    list(dates_by_stock[stock_code]),
+                )
+                conn.commit()
+                continue
+
+            if analysis is not None:
+                message += (
+                    f"\n🧠 <b>i_report:</b> {analysis['decision']} "
+                    f"(score {analysis['score']}/100, "
+                    f"confidence {analysis['confidence']}%)"
+                )
+            elif IREPORT_FILTER_ENABLED:
+                message += "\n🧠 <b>i_report:</b> analysis unavailable (fail-open)"
+
 
             log.info(
                 "Sending alert for %s (score=%d, %d trades shown, streak=%d)",

@@ -1,3 +1,6 @@
 cloudscraper
 requests
 yfinance>=1.5.2
+# for the i_report filter (ireport_filter.py)
+pandas
+pandas-ta-classic
