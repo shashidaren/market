@@ -28,6 +28,9 @@ from pathlib import Path
 HERE = Path(__file__).parent
 DB = HERE / "prices.db"
 
+sys.path.insert(0, str(HERE))
+from util import to_db_str, utc_now_str  # noqa: E402
+
 OK, FAIL, WARN = "\033[92m[ OK ]\033[0m", "\033[91m[FAIL]\033[0m", "\033[93m[WARN]\033[0m"
 failures = 0
 
@@ -159,7 +162,6 @@ def inject_test_signal(live_price):
     pip = 0.0001
     entry = live_price
     sl, tp = entry - 30 * pip, entry + 60 * pip   # BUY, R:R = 2.0 (> MIN_LIVE_RR)
-    now = datetime.now(timezone.utc)
     con = sqlite3.connect(DB)
     cur = con.execute(
         """INSERT INTO signals (pair, direction, entry, stop_loss, take_profit,
@@ -167,7 +169,8 @@ def inject_test_signal(live_price):
            VALUES (?,?,?,?,?,?,?,?,?,0,?)""",
         ("EURUSD", "BUY", entry, sl, tp, 30 * pip, 55.0,
          "🧪 TEST SIGNAL (preflight_check.py) — NOT a real setup, do not trade",
-         now.isoformat(), (now + timedelta(hours=1)).isoformat()))
+         utc_now_str(),
+         to_db_str(datetime.now(timezone.utc) + timedelta(hours=1))))
     con.commit()
     con.close()
     report(True, "inject test signal",

@@ -35,17 +35,21 @@ import requests
 import yfinance as yf
 
 from fx_config import (
+    ACCOUNT_BALANCE,
+    ACCOUNT_CURRENCY,
+    CONTRACT_SIZE,
     FX_PAIRS,
     MIN_BARS_FOR_STATS,
     MIN_LIVE_RR,
-    RSI_OVERBOUGHT,
-    RSI_OVERSOLD,
+    MIN_LOT,
+    RISK_PER_TRADE_PCT,
     STALE_SUPPRESS_PIPS,
     STALE_WARN_PIPS,
 )
+from util import migrate_timestamps, utc_now_str
 
 try:
-    from calendar_checker import get_upcoming_events, summarise_news_risk
+    from calendar_checker import get_recent_events
     CALENDAR_AVAILABLE = True
 except ImportError:
     CALENDAR_AVAILABLE = False
@@ -343,6 +347,45 @@ def compute_live_metrics(
     return drift_pips, live_rr, is_warn, is_suppress, is_untradeable
 
 
+def compute_position_size(
+    entry: float, stop_loss: float, cfg: dict
+) -> dict:
+    """
+    Position size in lots so the stop-loss distance risks
+    RISK_PER_TRADE_PCT of ACCOUNT_BALANCE.
+
+    Returns:
+        lots          — rounded to 2 decimals (broker-lot precision)
+        risk_amount   — USD-equivalent risk for USD-quoted pairs; for
+                        non-USD quotes it is in the quote currency
+                        (e.g. JPY for USDJPY) and is marked as such.
+        below_min_lot — True when the risk-optimal size is below MIN_LOT
+                        (i.e. the broker minimum already risks more than
+                        the target — the trade should be skipped or sized
+                        up knowingly).
+    """
+    sl_dist = abs(entry - stop_loss)
+    if sl_dist <= 0:
+        return {"lots": 0.0, "risk_amount": 0.0, "below_min_lot": True}
+
+    pip_value_per_lot = CONTRACT_SIZE * cfg["pip_size"]   # quote currency
+    sl_pips           = sl_dist / cfg["pip_size"]
+    risk_budget       = ACCOUNT_BALANCE * RISK_PER_TRADE_PCT / 100.0
+
+    ideal_lots = risk_budget / (pip_value_per_lot * sl_pips)
+    below_min  = ideal_lots < MIN_LOT
+
+    lots          = max(MIN_LOT, round(ideal_lots, 2))
+    actual_risk   = lots * pip_value_per_lot * sl_pips   # quote currency
+
+    return {
+        "lots":          lots,
+        "risk_amount":   actual_risk,
+        "below_min_lot": below_min,
+        "currency":      cfg.get("quote", ""),
+    }
+
+
 # ------------------------------------------------------------------
 # Message formatting
 # ------------------------------------------------------------------
@@ -361,6 +404,7 @@ def format_message(
     bar_age_minutes: float,
     news_events: list,
     historical_stats: dict | None,
+    sizing: dict | None = None,
 ) -> str:
     (signal_id, pair, direction, entry, stop_loss, take_profit,
      atr_1h, rsi_1h, rationale, generated_at) = row
@@ -405,6 +449,37 @@ def format_message(
         f"Ref R:R:     <code>{ref_rr:.2f}</code>",
     ]
 
+    # ── Position sizing ──────────────────────────────────────────
+    sizing_lines = []
+    if sizing and sizing["lots"] > 0:
+        lots    = sizing["lots"]
+        risk    = sizing["risk_amount"]
+        cur     = sizing.get("currency", "")
+        in_acct = cur == ACCOUNT_CURRENCY
+        risk_disp = f"{risk:.2f} {cur}" if in_acct else (
+            f"{risk:.2f} {cur} (quote)"
+        )
+        if in_acct:
+            pct = risk / ACCOUNT_BALANCE * 100.0
+            base = (
+                f"📐 Size: <code>{lots:.2f} lots</code> — "
+                f"SL risks <code>≈{risk_disp}</code> "
+                f"({pct:.1f}% of {ACCOUNT_BALANCE:.0f} {ACCOUNT_CURRENCY})"
+            )
+        else:
+            base = (
+                f"📐 Size: <code>{lots:.2f} lots</code> — "
+                f"SL risks <code>≈{risk_disp}</code> "
+                f"(target {RISK_PER_TRADE_PCT:.1f}% of "
+                f"{ACCOUNT_BALANCE:.0f} {ACCOUNT_CURRENCY})"
+            )
+        if sizing["below_min_lot"]:
+            base += (
+                f"\n⚠️ Min lot ({MIN_LOT:.2f}) exceeds the "
+                f"{RISK_PER_TRADE_PCT:.1f}% risk budget — skip or accept."
+            )
+        sizing_lines.append(base)
+
     # ── Drift / live R:R ─────────────────────────────────────────
     drift_lines = []
     if live_price is not None and drift_pips is not None:
@@ -442,21 +517,31 @@ def format_message(
     ]
 
     # ── News risk ─────────────────────────────────────────────────
+    # NOTE: calendar_checker is a LOOK-BACK over already-published news
+    # (no free forward-looking calendar), so "minutes_away" is really
+    # "minutes since release" — the volatility window is AFTER a release,
+    # not before. Wording below reflects that.
     news_lines = []
     if news_events:
-        news_lines.append("📅 <b>Upcoming High-Impact Events:</b>")
+        news_lines.append("📅 <b>Recent High-Impact News:</b>")
         for ev in news_events:
             news_lines.append(
                 f"  ⚠️ {ev['currency']} — {html.escape(ev['event'])} "
-                f"in <code>{ev['minutes_away']} min</code>"
+                f"<code>{ev['minutes_away']} min ago</code>"
             )
-        soonest = min(ev["minutes_away"] for ev in news_events)
-        if soonest <= 15:
-            news_lines.append("🚫 <b>Recommendation: WAIT — event imminent</b>")
-        elif soonest <= 30:
-            news_lines.append("⚠️ <b>Recommendation: WAIT or reduce size</b>")
+        most_recent = min(ev["minutes_away"] for ev in news_events)
+        if most_recent <= 15:
+            news_lines.append(
+                "🚫 <b>Recommendation: WAIT — high-impact release "
+                "within last 15 min (volatile)</b>"
+            )
+        elif most_recent <= 30:
+            news_lines.append(
+                "⚠️ <b>Recommendation: WAIT or reduce size — "
+                "recent release still settling</b>"
+            )
         else:
-            news_lines.append("ℹ️ Event approaching — monitor closely")
+            news_lines.append("ℹ️ Recent release — monitor closely")
     else:
         news_lines.append("📅 News risk: <code>CLEAR</code> ✅")
 
@@ -491,6 +576,7 @@ def format_message(
         [""],
         level_lines,
         [""],
+        sizing_lines,
         drift_lines,
         [""],
         indicator_lines,
@@ -563,6 +649,7 @@ def main() -> None:
 
     conn = sqlite3.connect(PRICES_DB_PATH)
     conn.execute("PRAGMA journal_mode=WAL;")
+    migrate_timestamps(conn)  # one-time legacy timestamp conversion (idempotent)
 
     signals = get_undelivered_signals(conn)
     if not signals:
@@ -614,7 +701,7 @@ def main() -> None:
         news_events = []
         if CALENDAR_AVAILABLE:
             try:
-                news_events = get_upcoming_events(pair)
+                news_events = get_recent_events(pair)
             except Exception:
                 log.exception("Calendar check failed for %s, continuing", pair)
 
@@ -674,6 +761,14 @@ def main() -> None:
                     direction, pair, signal_id, drift_pips,
                 )
 
+            # Position sizing (uses live price when available — that is
+            # the actual entry; otherwise falls back to reference entry)
+            sizing = None
+            cfg_pair = FX_PAIRS.get(pair)
+            if cfg_pair and stop_loss:
+                sizing_entry = live_price if live_price is not None else entry
+                sizing = compute_position_size(sizing_entry, stop_loss, cfg_pair)
+
             # Build message
             text = format_message(
                 row,
@@ -683,36 +778,61 @@ def main() -> None:
                 bar_age_minutes,
                 news_events,
                 historical_stats,
+                sizing,
             )
 
             # Handle suppressed signals — keep in queue for retry
             if is_suppress or is_untradeable:
-                conn.execute(
-                    "UPDATE signals SET suppressed = 1 WHERE id = ?",
+                notified = conn.execute(
+                    "SELECT suppressed_notified_at FROM signals WHERE id = ?",
                     (signal_id,),
+                ).fetchone()
+                already_notified = bool(notified and notified[0])
+
+                if already_notified:
+                    # Re-evaluate quietly each run; do NOT spam the ⛔
+                    conn.execute(
+                        "UPDATE signals SET suppressed = 1 WHERE id = ?",
+                        (signal_id,),
+                    )
+                    conn.commit()
+                    log.info(
+                        "Signal id=%d still suppressed — ⛔ already sent once, skipping send",
+                        signal_id,
+                    )
+                    continue
+
+                # First time suppressed — send the ⛔ message ONCE, and only
+                # mark notified if the send actually succeeded (else retry)
+                ok = send_telegram_message(token, chat_id, text)
+                conn.execute(
+                    "UPDATE signals SET suppressed = 1, suppressed_notified_at = ? "
+                    "WHERE id = ?",
+                    (utc_now_str() if ok else None, signal_id),
                 )
                 conn.commit()
-                # Still send the ⛔ message so you know it fired
-                send_telegram_message(token, chat_id, text)
                 log.info(
-                    "Signal id=%d marked suppressed — will re-evaluate next run",
-                    signal_id,
+                    "Signal id=%d marked suppressed — ⛔ sent once (%s), "
+                    "will re-evaluate quietly next run",
+                    signal_id, "sent" if ok else "send failed, will retry",
                 )
                 continue
 
             # Clear suppressed flag if price has recovered
             conn.execute(
-                "UPDATE signals SET suppressed = 0 WHERE id = ?",
+                "UPDATE signals SET suppressed = 0, suppressed_notified_at = NULL "
+                "WHERE id = ?",
                 (signal_id,),
             )
 
             success = send_telegram_message(token, chat_id, text)
             if success:
-                delivered_at = datetime.now(timezone.utc).isoformat()
+                delivered_at = utc_now_str()
                 conn.execute(
                     """
                     UPDATE signals
-                    SET delivered = 1, delivered_at = ?, suppressed = 0
+                    SET delivered = 1, delivered_at = ?,
+                        suppressed = 0, suppressed_notified_at = NULL
                     WHERE id = ?
                     """,
                     (delivered_at, signal_id),

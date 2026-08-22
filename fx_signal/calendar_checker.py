@@ -64,7 +64,7 @@ def _is_relevant_to_pair(headline: str, pair: str) -> bool:
     return any(term.lower() in headline_lower for term in all_terms)
 
 
-def get_upcoming_events(
+def get_recent_events(
     pair: str,
     window_minutes: int = CALENDAR_WINDOW_MINUTES,
 ) -> list[dict]:
@@ -72,12 +72,16 @@ def get_upcoming_events(
     Returns high-impact news items affecting the currencies in `pair`
     published within the last `window_minutes`.
 
-    Uses Finnhub /news (FREE tier) — scans for high-impact keywords.
+    NOTE: this is a LOOK-BACK over already-published news — the free
+    Finnhub tier has no forward-looking economic-calendar endpoint. The
+    signal bot uses it as "volatility window after a release", NOT as an
+    upcoming-events alarm. (The telegram message was previously worded as
+    'event imminent', which was backwards — fixed.)
 
     Each event dict contains:
         event        : str  — news headline (truncated to 80 chars)
         currency     : str  — pair (e.g. EURUSD)
-        minutes_away : int  — minutes since published
+        minutes_away : int  — minutes since published (positive = past)
         impact       : str  — always high (keyword filtered)
     """
     api_key = _get_api_key()

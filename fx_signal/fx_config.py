@@ -51,6 +51,11 @@ __all__ = [
     "N_COMPLETED_BARS",
     "MIN_BARS_FOR_STATS",
     "CALENDAR_WINDOW_MINUTES",
+    "ACCOUNT_BALANCE",
+    "ACCOUNT_CURRENCY",
+    "RISK_PER_TRADE_PCT",
+    "MIN_LOT",
+    "CONTRACT_SIZE",
     "validate_config",
 ]
 
@@ -211,8 +216,25 @@ MIN_BARS_FOR_STATS = 30
 # ------------------------------------------------------------------
 # Economic calendar
 # ------------------------------------------------------------------
-# Look-ahead window in minutes for high-impact news events.
+# Look-BACK window in minutes for high-impact news events. The Finnhub
+# news proxy only sees events that were already published (there is no
+# free forward-looking calendar endpoint), so this is the volatility
+# window AFTER a release, not before.
 CALENDAR_WINDOW_MINUTES = 60
+
+# ------------------------------------------------------------------
+# Position sizing (shown in the Telegram message)
+# ------------------------------------------------------------------
+# Account balance and currency for the sizing line. Override via env:
+#   ACCOUNT_BALANCE=100 ACCOUNT_CURRENCY=USD RISK_PER_TRADE_PCT=1.0
+ACCOUNT_BALANCE    = float(_os.environ.get("ACCOUNT_BALANCE", "100"))
+ACCOUNT_CURRENCY   = _os.environ.get("ACCOUNT_CURRENCY", "USD")
+RISK_PER_TRADE_PCT = float(_os.environ.get("RISK_PER_TRADE_PCT", "1.0"))
+
+# Smallest tradable size (0.01 = 1,000 units at most brokers).
+MIN_LOT = 0.01
+# Standard contract size (1.00 lot = 100,000 units of base currency).
+CONTRACT_SIZE = 100_000
 
 # ------------------------------------------------------------------
 # Runtime validation
@@ -257,6 +279,20 @@ def validate_config() -> None:
 
     if SIGNAL_EXPIRY_HOURS < 1:
         raise ValueError("SIGNAL_EXPIRY_HOURS must be >= 1")
+
+    if ACCOUNT_BALANCE <= 0:
+        raise ValueError(f"ACCOUNT_BALANCE={ACCOUNT_BALANCE} must be > 0")
+
+    if not 0 < RISK_PER_TRADE_PCT <= 10:
+        raise ValueError(
+            f"RISK_PER_TRADE_PCT={RISK_PER_TRADE_PCT} must be in (0, 10]"
+        )
+
+    if MIN_LOT <= 0:
+        raise ValueError(f"MIN_LOT={MIN_LOT} must be > 0")
+
+    if not ACCOUNT_CURRENCY or len(ACCOUNT_CURRENCY) != 3:
+        raise ValueError(f"ACCOUNT_CURRENCY={ACCOUNT_CURRENCY!r} must be a 3-letter code")
 
 
 # Auto-validate on import so bad config fails immediately

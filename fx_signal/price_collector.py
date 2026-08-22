@@ -44,6 +44,7 @@ from fx_config import (
     RSI_PERIOD,
     TIMEFRAMES,
 )
+from util import UTC_FMT, migrate_timestamps, utc_now_str
 
 DB_PATH = Path(__file__).parent / "prices.db"
 
@@ -89,6 +90,9 @@ def init_db(conn: sqlite3.Connection) -> None:
         "CREATE INDEX IF NOT EXISTS idx_pair_tf "
         "ON price_signals(pair, timeframe)"
     )
+    # Convert any legacy 'T'/'+00:00' ISO timestamps to the SQLite-
+    # comparable space format so datetime('now') comparisons work.
+    migrate_timestamps(conn)
     conn.commit()
 
 
@@ -153,13 +157,17 @@ def compute_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 def to_utc_str(bar_time) -> str:
     """
-    Normalise a bar timestamp to a UTC ISO string ending in +00:00.
+    Normalise a bar timestamp to a UTC string in SQLite-comparable
+    format: 'YYYY-MM-DD HH:MM:SS' (same format as SQLite datetime('now')).
 
     yfinance may return timestamps in local market timezone (BST, EST,
     JST etc.) depending on the host system and yfinance version. Storing
-    everything in UTC ensures SQLite datetime() comparisons are always
-    correct — a BST timestamp stored as-is would be 1 hour off in every
-    expiry/dedup/freshness check.
+    everything in UTC ensures SQLite datetime() string comparisons are
+    always correct — a BST timestamp stored as-is would be 1 hour off in
+    every expiry/dedup/freshness check.
+
+    NOTE: the space separator is deliberate. 'YYYY-MM-DDTHH:MM:SS+00:00'
+    (isoformat) breaks SQLite comparisons because 'T' > ' ' — see util.py.
     """
     if hasattr(bar_time, "tzinfo") and bar_time.tzinfo is not None:
         # Already timezone-aware — convert to UTC
@@ -172,7 +180,7 @@ def to_utc_str(bar_time) -> str:
         log.warning("Unexpected bar_time type %s — using current UTC", type(bar_time))
         bar_time_utc = datetime.now(timezone.utc)
 
-    return bar_time_utc.strftime("%Y-%m-%dT%H:%M:%S+00:00")
+    return bar_time_utc.strftime(UTC_FMT)
 
 
 # ------------------------------------------------------------------
@@ -291,7 +299,7 @@ def store_completed_bars(
     start_idx    = -(n_bars + 1)
     completed_df = df.iloc[start_idx:-1]
 
-    now      = datetime.now(timezone.utc).isoformat()
+    now      = utc_now_str()
     written  = 0
     critical = ["ema_fast", "ema_slow", "rsi", "macd", "macd_signal", "atr"]
 

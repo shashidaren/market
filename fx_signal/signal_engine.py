@@ -39,6 +39,7 @@ from fx_config import (
     SIGNAL_MODE,
     SIGNAL_EXPIRY_HOURS,     # was never imported in old version
 )
+from util import migrate_timestamps, to_db_str, utc_now_str
 
 VALID_MODES    = ("strict", "relaxed")
 MIN_SL_PIPS    = 5
@@ -90,6 +91,9 @@ def init_signals_table(conn: sqlite3.Connection) -> None:
     _add_column_if_missing(conn, "signals", "execution_type", "TEXT")
     _add_column_if_missing(conn, "signals", "delivered_at",   "TEXT")
     _add_column_if_missing(conn, "signals", "suppressed",     "INTEGER NOT NULL DEFAULT 0")
+    # Set when the ⛔ DO NOT EXECUTE message is first sent for a signal —
+    # guards against re-sending it every cron cycle.
+    _add_column_if_missing(conn, "signals", "suppressed_notified_at", "TEXT")
 
     # Outcome tracking table — populated by outcome_tracker.py
     conn.execute(
@@ -109,6 +113,9 @@ def init_signals_table(conn: sqlite3.Connection) -> None:
         )
         """
     )
+    # Convert legacy 'T'/'+00:00' ISO timestamps to the SQLite-comparable
+    # space format (REVIEW.md item #1).
+    migrate_timestamps(conn)
     conn.commit()
 
 
@@ -245,7 +252,6 @@ def decide(
     if mode not in VALID_MODES:
         raise ValueError(f"Unknown mode {mode!r}")
 
-    close_1h    = row_1h["close"]
     ema_fast_1h = row_1h["ema_fast"]
     ema_slow_1h = row_1h["ema_slow"]
     rsi_1h      = row_1h["rsi"]
@@ -348,10 +354,18 @@ def store_signal(
     rationale: str,
     execution_type: str,
 ) -> int:
-    """Inserts signal and returns the new signal ID."""
-    now        = datetime.now(timezone.utc)
-    expires_at = (now + timedelta(hours=SIGNAL_EXPIRY_HOURS)).isoformat()
-    now_str    = now.isoformat()
+    """
+    Inserts signal and returns the new signal ID.
+
+    IMPORTANT: this function does NOT commit — the caller owns the
+    transaction (signal_engine.main wraps the dedup check + insert in
+    BEGIN IMMEDIATE and commits once). Committing here would break the
+    caller's atomicity: a later ROLLBACK could no longer undo this row.
+    """
+    now        = utc_now_str()
+    expires_at = to_db_str(
+        datetime.now(timezone.utc) + timedelta(hours=SIGNAL_EXPIRY_HOURS)
+    )
 
     cur = conn.execute(
         """
@@ -364,12 +378,11 @@ def store_signal(
         (
             pair, direction, entry, stop_loss, take_profit,
             atr_1h, rsi_1h, rationale, execution_type,
-            now_str, expires_at,
+            now, expires_at,
         ),
     )
-    conn.commit()
 
-    # Seed the outcome tracking row
+    # Seed the outcome tracking row (same transaction as the insert)
     conn.execute(
         """
         INSERT OR IGNORE INTO signal_outcomes
@@ -377,9 +390,8 @@ def store_signal(
              take_profit, generated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
-        (cur.lastrowid, pair, direction, entry, stop_loss, take_profit, now_str),
+        (cur.lastrowid, pair, direction, entry, stop_loss, take_profit, now),
     )
-    conn.commit()
 
     return cur.lastrowid
 
@@ -416,7 +428,6 @@ def main() -> None:
 
         # ── Fetch 4h row (strict mode only) ──────────────────────
         row_4h = None
-        is_4h_aligned = False
 
         if mode == "strict":
             row_4h = get_latest_row(conn, pair, "4h")
@@ -436,8 +447,6 @@ def main() -> None:
                     pair,
                 )
                 continue
-
-            is_4h_aligned = row_4h["ema_fast"] > row_4h["ema_slow"]  # rough flag for health score
 
         # ── Signal decision ───────────────────────────────────────
         direction, rationale = decide(row_1h, row_1h_prev, row_4h, mode=mode)
@@ -467,6 +476,9 @@ def main() -> None:
                 conn, pair, direction, entry, stop_loss, take_profit,
                 atr_1h, rsi_1h, rationale, EXECUTION_TYPE,
             )
+            # Single commit for the whole dedup+insert+outcome-seed
+            # transaction (store_signal deliberately does not commit).
+            conn.commit()
 
             log.info(
                 "%s: NEW %s signal id=%d entry=%.5f sl=%.5f tp=%.5f",

@@ -15,39 +15,12 @@ Run manually, any time - it's read-only:
 """
 
 import sqlite3
-import sys
 from pathlib import Path
 
 from fx_config import FX_PAIRS, RSI_OVERBOUGHT, RSI_OVERSOLD
-from signal_engine import decide
+from signal_engine import decide, get_latest_row, get_previous_row, validate_row
 
 PRICES_DB_PATH = Path(__file__).parent / "prices.db"
-
-
-def get_latest_row(conn: sqlite3.Connection, pair: str, timeframe: str):
-    conn.row_factory = sqlite3.Row
-    return conn.execute(
-        """
-        SELECT close, ema_fast, ema_slow, rsi, macd, macd_signal, atr, bar_time
-        FROM price_signals
-        WHERE pair = ? AND timeframe = ?
-        ORDER BY bar_time DESC
-        LIMIT 1
-        """,
-        (pair, timeframe),
-    ).fetchone()
-
-
-def validate_row(row, name: str) -> bool:
-    if row is None:
-        print(f"  {name}: NO DATA")
-        return False
-    critical = ["close", "ema_fast", "ema_slow", "rsi", "macd", "macd_signal", "atr", "bar_time"]
-    for col in critical:
-        if row[col] is None:
-            print(f"  {name}: NULL value in column '{col}'")
-            return False
-    return True
 
 
 def decide_loose(row_1h) -> tuple[str, str]:
@@ -87,18 +60,20 @@ def main() -> None:
             continue
 
         bar_time = row_1h["bar_time"]
+        # Previous 1h bar — needed for crossover detection in decide()
+        row_1h_prev = get_previous_row(conn, pair, "1h")
 
         # --- strict (needs 4h) ---
         row_4h = get_latest_row(conn, pair, "4h")
         if validate_row(row_4h, f"{pair}/4h"):
-            direction, reason = decide(row_1h, row_4h, mode="strict")
+            direction, reason = decide(row_1h, row_1h_prev, row_4h, mode="strict")
         else:
             direction, reason = "N/A", "missing or invalid 4h data"
         tally["strict"][direction if direction in tally["strict"] else "NO_SIGNAL"] += 1
         print(f"{pair:<8} {'strict':<28} {direction:<10} {bar_time:<22} {reason}")
 
         # --- relaxed (1h only, imported from signal_engine) ---
-        direction, reason = decide(row_1h, None, mode="relaxed")
+        direction, reason = decide(row_1h, row_1h_prev, None, mode="relaxed")
         tally["relaxed"][direction] += 1
         print(f"{pair:<8} {'relaxed (drop 4h)':<28} {direction:<10} {bar_time:<22} {reason}")
 

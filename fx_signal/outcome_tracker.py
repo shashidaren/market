@@ -26,6 +26,7 @@ from pathlib import Path
 import yfinance as yf
 
 from fx_config import FX_PAIRS, SIGNAL_EXPIRY_HOURS
+from util import migrate_timestamps, utc_now_str
 
 PRICES_DB_PATH = Path(__file__).parent / "prices.db"
 
@@ -118,7 +119,7 @@ def resolve_outcome(
 
     outcome     = "TP_HIT" if tp_hit else "SL_HIT"
     exit_price  = live_price
-    resolved_at = datetime.now(timezone.utc).isoformat()
+    resolved_at = utc_now_str()
 
     # Calculate minutes from signal generation to resolution
     try:
@@ -162,11 +163,11 @@ def expire_old_outcomes(conn: sqlite3.Connection) -> None:
         """
         UPDATE signal_outcomes
         SET outcome     = 'EXPIRED',
-            resolved_at = datetime('now')
+            resolved_at = ?
         WHERE outcome IS NULL
           AND generated_at < datetime('now', ?)
         """,
-        (f"-{OUTCOME_TRACK_HOURS} hours",),
+        (utc_now_str(), f"-{OUTCOME_TRACK_HOURS} hours"),
     )
     expired_count = conn.execute(
         "SELECT changes()"
@@ -210,6 +211,7 @@ def print_stats(conn: sqlite3.Connection) -> None:
 def main() -> None:
     conn = sqlite3.connect(PRICES_DB_PATH)
     conn.execute("PRAGMA journal_mode=WAL;")
+    migrate_timestamps(conn)  # one-time legacy timestamp conversion (idempotent)
 
     # First expire anything beyond the tracking window
     expire_old_outcomes(conn)
