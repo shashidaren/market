@@ -25,6 +25,7 @@ Requires: yfinance, pandas
 """
 
 import logging
+import os
 import sqlite3
 import sys
 import time
@@ -187,25 +188,161 @@ def to_utc_str(bar_time) -> str:
 # Data fetch
 # ------------------------------------------------------------------
 
+# One shared HTTP session for ALL yfinance calls in this run. yfinance
+# negotiates a Yahoo cookie + crumb per Ticker unless you pass a session —
+# sharing it means that negotiation (2 extra requests per symbol) happens
+# once per run instead of once per symbol. That is the single biggest
+# request-count reduction available, and it also keeps TLS connections
+# warm. If the private backend API changes, we degrade to no session.
+try:
+    from yfinance.data import _backend as _yf_backend
+    try:
+        SESSION = _yf_backend.Session(impersonate="chrome")
+    except TypeError:
+        SESSION = _yf_backend.Session()
+except Exception:
+    SESSION = None
+
+try:
+    from yfinance.exceptions import YFRateLimitError
+except ImportError:
+    YFRateLimitError = None
+
+YF_MAX_ATTEMPTS      = 3          # attempts per symbol fetch
+RETRY_BACKOFF_BASE   = 2.0        # seconds: attempt n waits 2**n
+RATE_LIMIT_WAIT_SECS = 60.0       # hard backoff when Yahoo says too-many-requests
+COLLECTOR_SLEEP_SECS = float(os.environ.get("FX_COLLECTOR_SLEEP", "0.5"))
+# Optional speed-up: fetch all symbols per timeframe in ONE parallel
+# yf.download() call. Off by default — multi-symbol FX downloads have a
+# known Yahoo quirk (identical series for every symbol), so the result is
+# validated and falls back to per-symbol fetches automatically.
+BATCH_FETCH_ENABLED  = os.environ.get("FX_BATCH_FETCH", "0") == "1"
+
+
 def fetch_ohlcv(
     yf_symbol: str, interval: str, period: str
 ) -> pd.DataFrame | None:
+    """
+    Fetch OHLCV with retry + exponential backoff.
+
+    Yahoo drops connections intermittently and rate-limits aggressively
+    (YFRateLimitError). Instead of failing the whole run, retry a few
+    times with backoff, and wait a full minute on an explicit
+    rate-limit signal. The run_pipeline flock guard means an extra 60s
+    here simply skips the next cron cycle — far better than hammering.
+    """
+    last_exc = None
+    for attempt in range(1, YF_MAX_ATTEMPTS + 1):
+        try:
+            if SESSION is not None:
+                df = yf.Ticker(yf_symbol, session=SESSION).history(
+                    interval=interval, period=period
+                )
+            else:
+                df = yf.Ticker(yf_symbol).history(interval=interval, period=period)
+        except Exception as exc:
+            last_exc = exc
+            if YFRateLimitError is not None and isinstance(exc, YFRateLimitError):
+                log.warning(
+                    "%s: Yahoo rate-limited — backing off %.0fs",
+                    yf_symbol, RATE_LIMIT_WAIT_SECS,
+                )
+                time.sleep(RATE_LIMIT_WAIT_SECS)
+            elif attempt < YF_MAX_ATTEMPTS:
+                log.warning(
+                    "%s: request failed (attempt %d/%d): %s",
+                    yf_symbol, attempt, YF_MAX_ATTEMPTS, exc,
+                )
+                time.sleep(RETRY_BACKOFF_BASE ** attempt)
+            continue
+
+        if df is None or df.empty:
+            if attempt < YF_MAX_ATTEMPTS:
+                log.warning(
+                    "%s: empty DataFrame (attempt %d/%d), retrying",
+                    yf_symbol, attempt, YF_MAX_ATTEMPTS,
+                )
+                time.sleep(RETRY_BACKOFF_BASE ** attempt)
+                continue
+            log.warning("%s: empty DataFrame returned by yfinance", yf_symbol)
+            return None
+
+        # yfinance sometimes returns MultiIndex columns for FX tickers
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+        return df
+
+    log.error(
+        "%s: all %d attempts failed — last error: %s",
+        yf_symbol, YF_MAX_ATTEMPTS, last_exc,
+    )
+    return None
+
+
+def fetch_ohlcv_batch(
+    yf_symbols: list, interval: str, period: str
+) -> dict | None:
+    """
+    Fetch one timeframe for many symbols via a single parallel
+    yf.download() call.
+
+    Returns {symbol: df} or None if the response is unusable — the
+    caller then falls back to per-symbol fetch_ohlcv().
+
+    Guard: Yahoo's multi-symbol chart endpoint occasionally returns the
+    IDENTICAL series for every FX symbol. We compare Close series across
+    symbols and treat identical output as a failed batch (never trust it).
+    """
     try:
-        ticker = yf.Ticker(yf_symbol)
-        df     = ticker.history(interval=interval, period=period)
+        df = yf.download(
+            list(yf_symbols), interval=interval, period=period,
+            group_by="ticker", threads=True, progress=False,
+            session=SESSION,
+        )
     except Exception:
-        log.exception("yfinance request failed for %s", yf_symbol)
+        log.exception("batch yfinance request failed (%s)", interval)
         return None
 
-    if df.empty:
-        log.warning("%s: empty DataFrame returned by yfinance", yf_symbol)
+    if df is None or df.empty:
+        log.warning("batch (%s): empty response", interval)
         return None
 
-    # yfinance sometimes returns MultiIndex columns for FX tickers
+    out, closes = {}, {}
     if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.get_level_values(0)
+        for sym in df.columns.get_level_values(0).unique():
+            try:
+                sub = df[sym]
+            except KeyError:
+                continue
+            sub = sub.dropna(subset=["Close"])
+            if len(sub) < 2:
+                continue
+            closes[sym] = sub["Close"].reset_index(drop=True)
+            out[sym] = sub
+    else:
+        # Single-symbol response (shouldn't happen with >1 symbols)
+        out["_"] = df
+        closes["_"] = df["Close"].reset_index(drop=True)
 
-    return df
+    if len(out) < 2:
+        log.warning("batch (%s): too few symbols returned (%d)", interval, len(out))
+        return None
+
+    # FX duplicate-series guard — identical Close across symbols is a
+    # Yahoo quirk, not real data.
+    ref = None
+    for sym, s in closes.items():
+        if ref is None:
+            ref = s
+            continue
+        if len(s) == len(ref) and (s == ref).all():
+            log.warning(
+                "batch (%s): identical Close series across symbols (%s) — "
+                "Yahoo FX quirk, falling back to per-symbol fetch",
+                interval, sym,
+            )
+            return None
+    return out
 
 
 # ------------------------------------------------------------------
@@ -370,16 +507,52 @@ def main() -> None:
     # Longest lookback period + buffer for EWM convergence.
     min_bars_needed = max(EMA_SLOW, RSI_PERIOD, ATR_PERIOD, MACD_SIGNAL) + 20
 
+    symbol_to_pair = {cfg["yf_symbol"]: pair for pair, cfg in FX_PAIRS.items()}
+
+    # Optional batch prefetch (FX_BATCH_FETCH=1): fetch every symbol per
+    # timeframe in one parallel call. Any unusable timeframe falls back
+    # to the normal per-symbol loop below.
+    fetched: dict = {}
+    if BATCH_FETCH_ENABLED:
+        for tf_name, tf_cfg in TIMEFRAMES.items():
+            log.info(
+                "batch fetch [%s] for %d symbols...",
+                tf_cfg["interval"], len(symbol_to_pair),
+            )
+            t0 = time.perf_counter()
+            dfs = fetch_ohlcv_batch(
+                list(symbol_to_pair.keys()),
+                tf_cfg["interval"],
+                tf_cfg["period"],
+            )
+            if not dfs:
+                log.warning(
+                    "batch fetch [%s] unusable — per-symbol fallback",
+                    tf_cfg["interval"],
+                )
+                continue
+            for sym, df in dfs.items():
+                fetched[(symbol_to_pair[sym], tf_name)] = df
+            log.info(
+                "batch fetch [%s] ok in %.2fs (%d symbols)",
+                tf_cfg["interval"], time.perf_counter() - t0, len(dfs),
+            )
+            time.sleep(COLLECTOR_SLEEP_SECS)
+
     for pair, cfg in FX_PAIRS.items():
         for tf_name, tf_cfg in TIMEFRAMES.items():
             try:
-                df = fetch_ohlcv(
-                    cfg["yf_symbol"],
-                    tf_cfg["interval"],
-                    tf_cfg["period"],
-                )
+                df = fetched.get((pair, tf_name))
                 if df is None:
-                    continue
+                    # Regular (or batch-fallback) per-symbol fetch
+                    df = fetch_ohlcv(
+                        cfg["yf_symbol"],
+                        tf_cfg["interval"],
+                        tf_cfg["period"],
+                    )
+                    if df is None:
+                        continue
+                    time.sleep(COLLECTOR_SLEEP_SECS)
 
                 if is_stale(df, tf_cfg["interval"]):
                     log.warning("%s [%s]: stale data, skipping", pair, tf_name)
@@ -430,9 +603,6 @@ def main() -> None:
             except Exception:
                 log.exception("Failed to process %s [%s]", pair, tf_name)
                 continue
-
-            # Rate-limit between requests to avoid Yahoo throttling
-            time.sleep(0.5)
 
     conn.close()
     log.info("price_collector complete.")

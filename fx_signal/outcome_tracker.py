@@ -70,16 +70,26 @@ def get_open_outcomes(conn: sqlite3.Connection) -> list[tuple]:
     return rows
 
 
+# Cache live prices per run — several open outcomes can share the same
+# pair; one fast_info call per pair, not per signal.
+_LIVE_PRICE_CACHE: dict = {}
+
+
 def get_live_price(yf_symbol: str) -> float | None:
     """Fetch latest price via yfinance fast_info (attribute access)."""
+    if yf_symbol in _LIVE_PRICE_CACHE:
+        return _LIVE_PRICE_CACHE[yf_symbol]
     try:
         fi    = yf.Ticker(yf_symbol).fast_info
         price = getattr(fi, "last_price", None)
         if price is None:
             price = getattr(fi, "previous_close", None)
-        return float(price) if price is not None else None
+        result = float(price) if price is not None else None
+        _LIVE_PRICE_CACHE[yf_symbol] = result
+        return result
     except Exception:
         log.exception("Price fetch failed for %s", yf_symbol)
+        _LIVE_PRICE_CACHE[yf_symbol] = None
         return None
 
 

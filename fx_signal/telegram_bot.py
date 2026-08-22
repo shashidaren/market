@@ -168,13 +168,22 @@ def get_historical_stats(
 # Live price
 # ------------------------------------------------------------------
 
+# Cache live prices per run — several queued signals can share the same
+# pair, and re-fetching fast_info for each one is wasted Yahoo calls.
+_LIVE_PRICE_CACHE: dict = {}
+
+
 def get_live_price(yf_symbol: str) -> float | None:
     """
     Fetches the most recent price via yfinance fast_info.
 
     fast_info is a FastInfo OBJECT — it does NOT support .get().
-    We use getattr() with a fallback chain.
+    We use getattr() with a fallback chain. Results are cached per run
+    (one fast_info call per pair, not per signal).
     """
+    if yf_symbol in _LIVE_PRICE_CACHE:
+        return _LIVE_PRICE_CACHE[yf_symbol]
+
     try:
         ticker = yf.Ticker(yf_symbol)
         fi     = ticker.fast_info
@@ -189,11 +198,14 @@ def get_live_price(yf_symbol: str) -> float | None:
                 )
         if price is None:
             log.warning("%s: no live price from fast_info", yf_symbol)
+            _LIVE_PRICE_CACHE[yf_symbol] = None
             return None
 
+        _LIVE_PRICE_CACHE[yf_symbol] = float(price)
         return float(price)
     except Exception:
         log.exception("Failed to fetch live price for %s", yf_symbol)
+        _LIVE_PRICE_CACHE[yf_symbol] = None
         return None
 
 
