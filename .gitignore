@@ -25,6 +25,7 @@ __pycache__/
 
 # Databases
 *.db
+*.db.*
 *.db.old
 *.db-shm
 *.db-wal
