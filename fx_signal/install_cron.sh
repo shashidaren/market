@@ -40,6 +40,17 @@ for arg in "$@"; do
 done
 DRY_RUN="${DRY_RUN:-0}"
 
+ENV_FILE="$SCRIPT_DIR/.env"
+
+# Load existing .env as defaults (so re-runs don't need the token passed
+# again) — values already set in the environment take precedence.
+if [[ -f "$ENV_FILE" ]]; then
+    set -a
+    # shellcheck source=/dev/null
+    . "$ENV_FILE"
+    set +a
+fi
+
 # ------------------------------------------------------------------
 # Validation
 # ------------------------------------------------------------------
@@ -77,16 +88,22 @@ if ! "$PYTHON_BIN" -c "import yfinance, pandas, requests" 2>/dev/null; then
 fi
 
 # ------------------------------------------------------------------
-# Write secrets to .env (600 perms) — never embed in crontab
+# Write secrets to .env (600 perms) — never embed in crontab.
+# Preserves any existing entries (FINNHUB_API_KEY, SIGNAL_MODE, ...)
+# instead of clobbering the whole file.
 # ------------------------------------------------------------------
 
-ENV_FILE="$SCRIPT_DIR/.env"
-cat > "$ENV_FILE" <<EOF
-TELEGRAM_BOT_TOKEN=$TELEGRAM_BOT_TOKEN
-TELEGRAM_CHAT_ID=$TELEGRAM_CHAT_ID
-EOF
+touch "$ENV_FILE"
 chmod 600 "$ENV_FILE"
-echo "Secrets written to $ENV_FILE (mode 600)"
+
+# Drop the two keys we manage, then re-append them (safe against values
+# containing $ or backticks — printf, not an unquoted heredoc).
+grep -v -E '^(TELEGRAM_BOT_TOKEN|TELEGRAM_CHAT_ID)=' "$ENV_FILE" > "$ENV_FILE.tmp" 2>/dev/null || true
+printf 'TELEGRAM_BOT_TOKEN=%s\nTELEGRAM_CHAT_ID=%s\n' \
+    "$TELEGRAM_BOT_TOKEN" "$TELEGRAM_CHAT_ID" >> "$ENV_FILE.tmp"
+mv "$ENV_FILE.tmp" "$ENV_FILE"
+chmod 600 "$ENV_FILE"
+echo "Secrets updated in $ENV_FILE (mode 600, other keys preserved)"
 
 # ------------------------------------------------------------------
 # Ensure log files exist and are writable
@@ -111,9 +128,9 @@ if [[ "$MODE" == "pipeline" ]]; then
     new_block=$(cat <<EOF
 
 $MARKER
-# Mode: single pipeline (run_pipeline.sh)
+# Mode: single pipeline (run_pipeline.sh), every ${INTERVAL_MINUTES} min
 # BASH_ENV sources $ENV_FILE for TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID
-* * * * * BASH_ENV=$ENV_FILE $SCRIPT_DIR/run_pipeline.sh
+*/$INTERVAL_MINUTES * * * * BASH_ENV=$ENV_FILE $SCRIPT_DIR/run_pipeline.sh
 $END_MARKER
 EOF
 )
