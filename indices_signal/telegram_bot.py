@@ -19,6 +19,8 @@ from signal_engine import (
     log_signal,
 )
 
+from util import to_utc_str
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
@@ -65,7 +67,9 @@ def format_message(sig):
 
     stop_pts = abs(sig["price"] - sig["sl"])
 
-    bar_time = sig["bar_time"]
+    # Same UTC format the DB uses ('YYYY-MM-DD HH:MM:SS') — the raw
+    # pandas Timestamp rendered as '2026-08-21 20:00:00+00:00'.
+    bar_time = to_utc_str(sig["bar_time"])
 
     msg = f"""
 {MESSAGE_PREFIX} {emoji}
@@ -115,7 +119,9 @@ def format_message(sig):
     if rec:
         msg += f"\n📈 Track record: {rec}"
 
-    msg += """
+    # f-string, NOT a plain string — a plain """...{expiry}...""" here
+    # once sent the literal text "{expiry}" to Telegram.
+    msg += f"""
 
 ⚠️ Confirm the current XM CFD price before entering.
 ⏰ Strategy: 4H Multi-Timeframe

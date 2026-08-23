@@ -333,6 +333,71 @@ def remove_open_candles(
 
 
 # ============================================================
+# HARD VETOES
+#
+# Standalone so they are unit-testable without a DB or yfinance.
+# ============================================================
+
+def bar_age_hours(bar_time, now=None):
+    """Hours since the completed 4H bar CLOSED (bar start + 4h)."""
+
+    if now is None:
+        now = datetime.now(timezone.utc)
+
+    if hasattr(bar_time, "to_pydatetime"):
+        bar_time = bar_time.to_pydatetime()
+
+    if bar_time.tzinfo is None:
+        bar_time = bar_time.replace(tzinfo=timezone.utc)
+    else:
+        bar_time = bar_time.astimezone(timezone.utc)
+
+    bar_close = bar_time + timedelta(hours=4)
+
+    return (now - bar_close).total_seconds() / 3600.0
+
+
+def is_bar_stale(bar_time, now=None):
+    """
+    True when the completed 4H bar closed more than
+    max_bar_age_hours ago — e.g. Friday's last gold candle
+    scored on the Sunday-evening reopen. A stale bar makes the
+    entire entry/SL/TP geometry fiction: the quoted entry
+    reference belongs to a market that no longer exists.
+    """
+
+    max_age = SIGNAL_CONFIG.get(
+        "max_bar_age_hours", 6
+    )
+
+    return bar_age_hours(bar_time, now) > max_age
+
+
+def rsi_vetoes(signal_type, rsi_val):
+    """
+    Absolute RSI gate, independent of score.
+
+    The scoring zones (min/max_rsi_buy/sell) only decide whether
+    RSI ADDS +15; the other five checks alone can reach min_score,
+    which let a BUY through at RSI 76.6. This blocks:
+      BUY  when RSI > rsi_veto_buy_above  (default 70)
+      SELL when RSI < rsi_veto_sell_below (default 30)
+    """
+
+    if signal_type == "BUY":
+        return rsi_val > SIGNAL_CONFIG.get(
+            "rsi_veto_buy_above", 70
+        )
+
+    if signal_type == "SELL":
+        return rsi_val < SIGNAL_CONFIG.get(
+            "rsi_veto_sell_below", 30
+        )
+
+    return False
+
+
+# ============================================================
 # SIGNAL ANALYSIS
 # ============================================================
 
@@ -513,6 +578,22 @@ def analyze_ticker(ticker_key):
     # MARKET FILTERS
     # ========================================================
 
+    # Stale-bar veto: the "latest completed candle" must have
+    # closed recently. After a weekend/holiday gap the newest bar
+    # in the DB can be days old (gold: Friday 20:00 bar scored on
+    # the Sunday 22:00+ reopen) — its price, ATR, SL and TP no
+    # longer describe the live market.
+    if is_bar_stale(last["datetime"]):
+
+        logger.info(
+            "%s: last 4H bar is stale (closed %.1fh ago, max %dh) — no signal",
+            ticker_key,
+            bar_age_hours(last["datetime"]),
+            SIGNAL_CONFIG.get("max_bar_age_hours", 6),
+        )
+
+        return None
+
     if adx_val < SIGNAL_CONFIG["min_adx"]:
 
         logger.info(
@@ -674,6 +755,20 @@ def analyze_ticker(ticker_key):
         and buy_score > sell_score
     ):
 
+        # RSI hard veto — an overbought BUY passes the additive
+        # score (75 without any RSI points) but is the worst
+        # possible entry timing. Absolute gate, not a score item.
+        if rsi_vetoes("BUY", rsi_val):
+
+            logger.info(
+                "%s: BUY vetoed — RSI %.1f > %.0f (overbought)",
+                ticker_key,
+                rsi_val,
+                SIGNAL_CONFIG.get("rsi_veto_buy_above", 70),
+            )
+
+            return None
+
         sl = (
             price
             - (
@@ -710,6 +805,19 @@ def analyze_ticker(ticker_key):
         >= SIGNAL_CONFIG["min_score"]
         and sell_score > buy_score
     ):
+
+        # RSI hard veto — mirror of the BUY case: never SELL
+        # into oversold, regardless of score.
+        if rsi_vetoes("SELL", rsi_val):
+
+            logger.info(
+                "%s: SELL vetoed — RSI %.1f < %.0f (oversold)",
+                ticker_key,
+                rsi_val,
+                SIGNAL_CONFIG.get("rsi_veto_sell_below", 30),
+            )
+
+            return None
 
         sl = (
             price

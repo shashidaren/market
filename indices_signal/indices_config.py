@@ -109,12 +109,31 @@ SIGNAL_CONFIG = {
     # Trend strength
     "min_adx": 25,
 
-    # RSI zones
+    # RSI zones (scoring bonus — inside the zone earns +15)
     "min_rsi_buy": 40,
     "max_rsi_buy": 65,
 
     "min_rsi_sell": 35,
     "max_rsi_sell": 60,
+
+    # RSI hard veto (blocks the signal regardless of score)
+    #
+    # The scoring zones above only decide whether RSI ADDS points.
+    # Without a veto, the other five checks alone can reach
+    # min_score (25+15+15+10+10 = 75), so a BUY could fire at
+    # RSI 76+ — textbook overbought. These are absolute gates.
+    "rsi_veto_buy_above": 70,
+    "rsi_veto_sell_below": 30,
+
+    # Stale-bar veto
+    #
+    # Max hours between the completed 4H bar's CLOSE and "now"
+    # before the signal is discarded. Without this, the first cron
+    # tick after the weekend (gold reopens Sun 22:00 UTC) scored
+    # Friday's last candle as if it had just closed, and the
+    # message quoted entry/SL/TP off a market ~50h old.
+    # 6h = one bar length + slack for a delayed collector run.
+    "max_bar_age_hours": 6,
 
     # Duplicate protection
     #

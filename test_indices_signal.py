@@ -1,9 +1,24 @@
 #!/usr/bin/env python3
 """Unit tests for indices_signal helpers — no yfinance / network required."""
 
+import os
 import sqlite3
+import sys
+import tempfile
 import unittest
 from datetime import datetime, timezone
+
+# Keep DB access out of the repo checkout (track_record etc.).
+os.environ.setdefault(
+    "INDICES_DB_PATH",
+    os.path.join(tempfile.gettempdir(), "test_indices_signal.db"),
+)
+
+# signal_engine / telegram_bot use flat imports (cron runs them from
+# inside indices_signal/), so put that directory on the path too.
+_PKG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "indices_signal")
+if _PKG_DIR not in sys.path:
+    sys.path.insert(0, _PKG_DIR)
 
 from indices_signal.util import (
     UTC_FMT,
@@ -13,6 +28,14 @@ from indices_signal.util import (
     to_utc_str,
     utc_now_str,
 )
+
+from signal_engine import (  # noqa: E402
+    bar_age_hours,
+    is_bar_stale,
+    rsi_vetoes,
+)
+
+from telegram_bot import format_message  # noqa: E402
 
 
 class TimestampTests(unittest.TestCase):
@@ -93,6 +116,95 @@ class MarketHoursTests(unittest.TestCase):
         self.assertFalse(is_market_open("US30", now=before))
         self.assertTrue(is_market_open("US30", now=during))
         self.assertFalse(is_market_open("US30", now=after))
+
+
+class StaleBarVetoTests(unittest.TestCase):
+    """The 2026-08-21 20:00 gold signal: Friday's last 4H bar was
+    scored on the Sunday-evening reopen, ~50h after it closed."""
+
+    FRIDAY_BAR = datetime(2026, 8, 21, 20, 0, tzinfo=timezone.utc)
+    SUNDAY_REOPEN = datetime(2026, 8, 23, 22, 5, tzinfo=timezone.utc)
+
+    def test_friday_bar_is_stale_on_sunday_reopen(self):
+        self.assertTrue(
+            is_bar_stale(self.FRIDAY_BAR, now=self.SUNDAY_REOPEN)
+        )
+        # ~46h since the bar CLOSED (started 20:00, closed 24:00 Fri)
+        self.assertAlmostEqual(
+            bar_age_hours(self.FRIDAY_BAR, now=self.SUNDAY_REOPEN),
+            46.08,
+            delta=0.1,
+        )
+
+    def test_fresh_bar_is_not_stale(self):
+        bar = datetime(2026, 8, 24, 8, 0, tzinfo=timezone.utc)
+        just_after_close = datetime(2026, 8, 24, 12, 30, tzinfo=timezone.utc)
+        self.assertFalse(is_bar_stale(bar, now=just_after_close))
+
+    def test_bar_stale_just_past_threshold(self):
+        bar = datetime(2026, 8, 24, 0, 0, tzinfo=timezone.utc)
+        # closed 04:00; max age 6h -> stale strictly after 10:00
+        self.assertFalse(
+            is_bar_stale(bar, now=datetime(2026, 8, 24, 10, 0, tzinfo=timezone.utc))
+        )
+        self.assertTrue(
+            is_bar_stale(bar, now=datetime(2026, 8, 24, 10, 1, tzinfo=timezone.utc))
+        )
+
+    def test_naive_and_pandas_timestamps_accepted(self):
+        import pandas as pd
+
+        naive = datetime(2026, 8, 21, 20, 0)
+        self.assertTrue(is_bar_stale(naive, now=self.SUNDAY_REOPEN))
+        ts = pd.Timestamp("2026-08-21 20:00:00", tz="UTC")
+        self.assertTrue(is_bar_stale(ts, now=self.SUNDAY_REOPEN))
+
+
+class RsiVetoTests(unittest.TestCase):
+    """The additive score reaches 75 without RSI points, so RSI must
+    be an absolute gate: no BUY overbought, no SELL oversold."""
+
+    def test_buy_vetoed_when_overbought(self):
+        # The exact reading from the stale gold message.
+        self.assertTrue(rsi_vetoes("BUY", 76.6))
+
+    def test_buy_allowed_at_or_below_threshold(self):
+        self.assertFalse(rsi_vetoes("BUY", 70.0))
+        self.assertFalse(rsi_vetoes("BUY", 55.0))
+
+    def test_sell_vetoed_when_oversold(self):
+        self.assertTrue(rsi_vetoes("SELL", 25.0))
+        self.assertFalse(rsi_vetoes("SELL", 30.0))
+        self.assertFalse(rsi_vetoes("SELL", 45.0))
+
+
+class MessageFormatTests(unittest.TestCase):
+    def _sig(self):
+        return {
+            "ticker": "GOLD",
+            "type": "BUY",
+            "price": 4680.60,
+            "sl": 4606.46,
+            "tp": 4810.34,
+            "score": 75,
+            "reasons": ["Daily uptrend", "4H EMA20 > EMA50"],
+            "rsi": 55.0,
+            "adx": 38.4,
+            "atr": 37.07,
+            "daily_trend": "BULL",
+            "bar_time": datetime(2026, 8, 21, 20, 0, tzinfo=timezone.utc),
+        }
+
+    def test_expiry_placeholder_is_rendered(self):
+        """A plain (non-f) string once sent the literal '{expiry}'."""
+        msg = format_message(self._sig())
+        self.assertNotIn("{expiry}", msg)
+        self.assertIn("Act within ~8h", msg)
+
+    def test_bar_time_uses_db_utc_format(self):
+        msg = format_message(self._sig())
+        self.assertIn("2026-08-21 20:00:00", msg)
+        self.assertNotIn("+00:00", msg)
 
 
 if __name__ == "__main__":
