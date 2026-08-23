@@ -22,6 +22,7 @@ import sys
 from datetime import datetime, timezone
 
 from indices_config import DB_PATH, PRIMARY_TIMEFRAME
+from util import migrate_timestamps, utc_now_str
 
 # How long (hours) we keep checking a signal for TP/SL before expiry.
 OUTCOME_TRACK_HOURS = 7 * 24
@@ -95,7 +96,7 @@ def expire_old(conn):
           AND (sent_at < datetime('now', ?) OR sl IS NULL)
         """,
         (
-            datetime.now(timezone.utc).isoformat(),
+            utc_now_str(),
             f"-{OUTCOME_TRACK_HOURS} hours",
         ),
     )
@@ -157,7 +158,7 @@ def main():
             (
                 outcome,
                 exit_price,
-                datetime.now(timezone.utc).isoformat(),
+                utc_now_str(),
                 rowid,
             ),
         )

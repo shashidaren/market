@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 import numpy as np
 import pandas as pd
 
+from util import is_market_open, migrate_timestamps, utc_now_str
 from indices_config import (
     TICKERS,
     DB_PATH,
@@ -765,27 +766,7 @@ def analyze_ticker(ticker_key):
     return signal
 
 
-# ============================================================
-# MARKET HOURS
-# ============================================================
-
-def is_market_open(ticker_key):
-
-    now = datetime.now(
-        timezone.utc
-    )
-
-    hour = now.hour
-
-    hours = MARKET_HOURS[
-        ticker_key
-    ]
-
-    return (
-        hours["start"]
-        <= hour
-        <= hours["end"]
-    )
+# is_market_open is imported from util (weekday-aware).
 
 
 # ============================================================
@@ -822,7 +803,7 @@ def check_cooldown(
                 "cooldown_hours"
             ]
         )
-    ).isoformat()
+    ).strftime("%Y-%m-%d %H:%M:%S")
 
     cur.execute(
         """
@@ -875,6 +856,7 @@ def ensure_schema(db_path=DB_PATH):
                 f"ALTER TABLE signals_sent ADD COLUMN {col} {coltype}"
             )
     conn.commit()
+    migrate_timestamps(conn)
     conn.close()
 
 
@@ -908,9 +890,7 @@ def log_signal(signal):
         (
             signal["ticker"],
             signal["type"],
-            datetime.now(
-                timezone.utc
-            ).isoformat(),
+            utc_now_str(),
             signal["price"],
             signal["score"],
             signal["sl"],

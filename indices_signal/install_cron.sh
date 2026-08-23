@@ -63,7 +63,8 @@ fi
 for logfile in \
     /var/log/webscrap-indices-pipeline.log \
     /var/log/webscrap-indices-collector.log \
-    /var/log/webscrap-indices-telegram.log; do
+    /var/log/webscrap-indices-telegram.log \
+    /var/log/webscrap-indices-outcome.log; do
     if [[ ! -f "$logfile" ]]; then
         if touch "$logfile" 2>/dev/null; then
             chmod 644 "$logfile"

@@ -1,6 +1,7 @@
 # /opt/market/indices_signal/price_collector.py
 
 import logging
+import os
 import sqlite3
 import sys
 from pathlib import Path
@@ -14,7 +15,9 @@ from indices_config import (
     TREND_TIMEFRAME,
     INTRADAY_LOOKBACK_DAYS,
     DAILY_LOOKBACK_DAYS,
+    SIGNAL_CONFIG,
 )
+from util import migrate_timestamps, parse_db_ts, to_utc_str
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
@@ -87,6 +90,7 @@ def init_db():
             )
 
     conn.commit()
+    migrate_timestamps(conn)
     conn.close()
 
     logger.info("Database initialized")
@@ -96,7 +100,37 @@ def init_db():
 # DATA FETCHING
 # ============================================================
 
-def fetch_data(symbol, timeframe):
+FORCE_FETCH = os.environ.get("INDICES_FORCE_FETCH", "0") == "1"
+EMPTY_STREAK_TRIPS = int(os.environ.get("INDICES_EMPTY_STREAK_TRIPS", "3"))
+# Once the DB is warm, only pull a short window to catch new bars.
+INCREMENTAL_PERIOD = os.environ.get("INDICES_INCREMENTAL_PERIOD", "10d")
+
+
+def have_current_closed_bar(conn, ticker_key, timeframe, interval) -> bool:
+    row = conn.execute(
+        """
+        SELECT datetime FROM prices
+        WHERE ticker = ? AND timeframe = ?
+        ORDER BY datetime DESC LIMIT 1
+        """,
+        (ticker_key, timeframe),
+    ).fetchone()
+    if not row:
+        return False
+    last = parse_db_ts(row[0])
+    if last is None:
+        return False
+    return yahoo_client.is_closed_bar_current(last, interval)
+
+
+def history_count(conn, ticker_key, timeframe) -> int:
+    return conn.execute(
+        "SELECT COUNT(*) FROM prices WHERE ticker = ? AND timeframe = ?",
+        (ticker_key, timeframe),
+    ).fetchone()[0]
+
+
+def fetch_data(symbol, timeframe, period=None):
     """
     Fetch raw Yahoo Finance data.
 
@@ -106,10 +140,10 @@ def fetch_data(symbol, timeframe):
 
     if timeframe == "4h":
         interval = "1h"
-        period = f"{INTRADAY_LOOKBACK_DAYS}d"
+        period = period or f"{INTRADAY_LOOKBACK_DAYS}d"
     else:
         interval = "1d"
-        period = f"{DAILY_LOOKBACK_DAYS}d"
+        period = period or f"{DAILY_LOOKBACK_DAYS}d"
 
     logger.info(
         "Fetching %s | interval=%s | period=%s",
@@ -233,7 +267,7 @@ def store_dataframe(ticker_key, timeframe, df):
                 (
                     ticker_key,
                     timeframe,
-                    str(row[date_col]),
+                    to_utc_str(row[date_col]),
                     float(row["Open"]),
                     float(row["High"]),
                     float(row["Low"]),
@@ -315,19 +349,69 @@ def collect_all():
 
     init_db()
 
+    fetched_n = 0
+    skipped_n = 0
+    empty_streak = 0
+    stop_fetching = yahoo_client.is_circuit_open()
+
+    if stop_fetching:
+        info = yahoo_client.circuit_info()
+        logger.warning(
+            "Yahoo circuit OPEN for %.0fs (%s) — using stored bars only",
+            info["remaining"], info["reason"] or "no reason",
+        )
+
+    conn = sqlite3.connect(DB_PATH)
+    jobs = (
+        (PRIMARY_TIMEFRAME, "4h", SIGNAL_CONFIG["min_4h_candles"]),
+        (TREND_TIMEFRAME, "1d", SIGNAL_CONFIG["min_1d_candles"]),
+    )
+
     for ticker_key in TICKERS:
+        for timeframe, interval, min_rows in jobs:
+            if stop_fetching:
+                break
+            if not FORCE_FETCH and have_current_closed_bar(
+                conn, ticker_key, timeframe, interval
+            ):
+                skipped_n += 1
+                logger.info(
+                    "%s @ %s: already have current closed bar — skip Yahoo",
+                    ticker_key, timeframe,
+                )
+                continue
 
-        fetch_and_store(
-            ticker_key,
-            PRIMARY_TIMEFRAME,
-        )
+            period = None
+            if history_count(conn, ticker_key, timeframe) >= min_rows:
+                period = INCREMENTAL_PERIOD
 
-        fetch_and_store(
-            ticker_key,
-            TREND_TIMEFRAME,
-        )
+            written = fetch_and_store(ticker_key, timeframe, period=period)
+            if yahoo_client.is_circuit_open():
+                logger.warning(
+                    "Yahoo circuit opened — stopping remaining fetches"
+                )
+                stop_fetching = True
+                break
+            if written == 0:
+                empty_streak += 1
+                if empty_streak >= EMPTY_STREAK_TRIPS:
+                    yahoo_client.trip_circuit(
+                        f"{empty_streak} consecutive empty Yahoo "
+                        f"responses (last={ticker_key} {timeframe})"
+                    )
+                    stop_fetching = True
+                    break
+            else:
+                empty_streak = 0
+                fetched_n += 1
+        if stop_fetching:
+            break
 
-    logger.info("Collection complete")
+    conn.close()
+    logger.info(
+        "Collection complete. fetched=%d skipped_fresh=%d circuit_open=%s",
+        fetched_n, skipped_n, yahoo_client.is_circuit_open(),
+    )
 
 
 if __name__ == "__main__":

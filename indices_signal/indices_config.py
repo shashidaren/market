@@ -1,6 +1,7 @@
 # /opt/market/indices_signal/indices_config.py
 
 import os
+from pathlib import Path as _Path
 
 # ------------------------------------------------------------------
 # Auto-load .env (next to this file) so every stage can be run
@@ -131,7 +132,12 @@ SIGNAL_CONFIG = {
 # DATABASE
 # ============================================================
 
-DB_PATH = "/opt/market/indices_signal/prices.db"
+# Next to this file so it works on the server (/opt/market/...) and
+# in any other checkout. Override with INDICES_DB_PATH if needed.
+DB_PATH = os.environ.get(
+    "INDICES_DB_PATH",
+    str(_Path(__file__).resolve().parent / "prices.db"),
+)
 
 
 # ============================================================
@@ -147,10 +153,9 @@ MESSAGE_PREFIX = "📊 [INDICES]"
 # ============================================================
 # MARKET HOURS
 #
-# Used only as a coarse filter before analysis.
-# UTC times.
-# US market hours vary with DST, so the collector/closed-candle
-# logic remains the authoritative source of usable candles.
+# Hour windows kept for documentation. The live filter is
+# util.is_market_open — weekday-aware (US indices closed Sat/Sun;
+# gold closed Sat + Sunday before 22:00 UTC).
 # ============================================================
 
 MARKET_HOURS = {

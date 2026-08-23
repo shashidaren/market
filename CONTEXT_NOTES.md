@@ -49,3 +49,24 @@ frames. Fixes on this branch:
 
 Inspect: `python3 /opt/market/yahoo_client.py`
 Reset:   `python3 /opt/market/yahoo_client.py --reset`
+
+## indices_signal check (2026-08-23)
+
+Live cron is **commented out** — the pipeline is not running. Do not
+re-enable the old job unchanged: every 30 min it pulled 60d of 1h +
+365d daily for GOLD/US30/US100 (6 fat Yahoo calls) and the hour-only
+market filter treated Sunday afternoon as "US30 open".
+
+Fixes on this branch:
+- skip-if-fresh + incremental 10d catch-up once the DB is warm
+- weekday-aware `is_market_open` (US closed Sat/Sun; gold closed Sat
+  + Sunday before 22:00 UTC)
+- timestamp migration to `YYYY-MM-DD HH:MM:SS` so same-day 4H TP/SL
+  hits actually resolve (same class of bug as FX REVIEW #1)
+- pipeline no longer `set -e`s past a failed Telegram send
+
+To enable after merge (optional):
+```
+cd /opt/market/indices_signal && ./install_cron.sh
+```
+Default is every 30 minutes — fine now that Yahoo is skip-if-fresh.
