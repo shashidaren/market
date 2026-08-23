@@ -19,14 +19,16 @@ Run via cron (same schedule as signal_engine):
 import logging
 import sqlite3
 import sys
-import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-import yfinance as yf
-
 from fx_config import FX_PAIRS, SIGNAL_EXPIRY_HOURS
 from util import migrate_timestamps, utc_now_str
+
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+import yahoo_client  # noqa: E402
 
 PRICES_DB_PATH = Path(__file__).parent / "prices.db"
 
@@ -70,27 +72,9 @@ def get_open_outcomes(conn: sqlite3.Connection) -> list[tuple]:
     return rows
 
 
-# Cache live prices per run — several open outcomes can share the same
-# pair; one fast_info call per pair, not per signal.
-_LIVE_PRICE_CACHE: dict = {}
-
-
 def get_live_price(yf_symbol: str) -> float | None:
-    """Fetch latest price via yfinance fast_info (attribute access)."""
-    if yf_symbol in _LIVE_PRICE_CACHE:
-        return _LIVE_PRICE_CACHE[yf_symbol]
-    try:
-        fi    = yf.Ticker(yf_symbol).fast_info
-        price = getattr(fi, "last_price", None)
-        if price is None:
-            price = getattr(fi, "previous_close", None)
-        result = float(price) if price is not None else None
-        _LIVE_PRICE_CACHE[yf_symbol] = result
-        return result
-    except Exception:
-        log.exception("Price fetch failed for %s", yf_symbol)
-        _LIVE_PRICE_CACHE[yf_symbol] = None
-        return None
+    """Latest price via the shared Yahoo client (cached + circuit-aware)."""
+    return yahoo_client.last_price(yf_symbol)
 
 
 def resolve_outcome(
@@ -260,8 +244,6 @@ def main() -> None:
         )
         if did_resolve:
             resolved += 1
-
-        time.sleep(0.3)   # rate limit
 
     log.info(
         "Resolved %d / %d open outcome(s) this run.",

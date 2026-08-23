@@ -85,9 +85,18 @@ code on the next run. If the change touched `install_cron.sh`, re-run it
   expected, not a failure.
 - **DB migration is automatic** — `util.py` migrates legacy timestamps on
   the first run of any stage. Keep a `prices.db.bak` before big upgrades.
-- **Rate limits**: keep `INTERVAL_MINUTES=5` (20 Yahoo calls per run).
-  `FX_BATCH_FETCH=1` in `.env` is the optional speed-up; it auto-falls
-  back per-symbol if Yahoo returns bad data.
+- **Rate limits**: the live crontab has a stray `* * * * *` FX pipeline
+  line (every minute). That is fine *now* — the collector skip-if-fresh
+  logic only hits Yahoo when the current closed 1h/4h bar is missing
+  (~2 fetches per pair per hour, not 20 per minute). A 429 still trips a
+  box-wide circuit (`/tmp/market-yahoo-circuit.json`, 15 min default)
+  so gold-watcher / indices / announcements fail fast instead of
+  extending the ban. Inspect / reset:
+  `python3 /opt/market/yahoo_client.py` and `--reset`.
+  Prefer `INTERVAL_MINUTES=5` if you re-run `install_cron.sh`, and
+  delete the unmanaged `* * * * * run_pipeline.sh` line so you don't
+  have two jobs. `FX_BATCH_FETCH=1` is the optional speed-up; it
+  auto-falls back per-symbol if Yahoo returns bad data.
 
 ---
 

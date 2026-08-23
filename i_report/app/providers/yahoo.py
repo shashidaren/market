@@ -1,7 +1,17 @@
-import yfinance as yf
+import sys
+from pathlib import Path
 
 from app.providers.base import MarketDataProvider
 from app.schemas.market import MarketSnapshot
+
+# Repo-root yahoo_client (circuit breaker). i_report/app/providers → market.
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+try:
+    import yahoo_client
+except ImportError:  # pragma: no cover — standalone i_report checkout
+    yahoo_client = None
 
 
 class YahooProvider(MarketDataProvider):
@@ -18,15 +28,22 @@ class YahooProvider(MarketDataProvider):
 
         yahoo_symbol = self.normalize_symbol(symbol)
 
-        ticker = yf.Ticker(yahoo_symbol)
+        if yahoo_client is not None:
+            df = yahoo_client.history(
+                yahoo_symbol,
+                period="1y",
+                interval="1d",
+                auto_adjust=False,
+            )
+        else:
+            import yfinance as yf
+            df = yf.Ticker(yahoo_symbol).history(
+                period="1y",
+                interval="1d",
+                auto_adjust=False,
+            )
 
-        df = ticker.history(
-            period="1y",
-            interval="1d",
-            auto_adjust=False
-        )
-
-        if df.empty:
+        if df is None or df.empty:
             raise ValueError(
                 f"No market data found for {symbol}"
             )

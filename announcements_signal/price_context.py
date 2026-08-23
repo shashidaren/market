@@ -17,12 +17,16 @@ Handles ISO and Bursa human date formats gracefully.
 
 import logging
 import sqlite3
+import sys
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-import yfinance as yf
-
 log = logging.getLogger("price_context")
+
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+import yahoo_client  # noqa: E402
 
 # Cache to avoid hammering Yahoo on repeated lookups within same run
 _price_cache: dict[str, dict] = {}
@@ -92,8 +96,8 @@ def get_price_context(
     end   = datetime.now() + timedelta(days=1)
 
     try:
-        stock = yf.Ticker(ticker)
-        hist = stock.history(
+        hist = yahoo_client.history(
+            ticker,
             start=start.strftime("%Y-%m-%d"),
             end=end.strftime("%Y-%m-%d"),
         )
@@ -101,7 +105,7 @@ def get_price_context(
         log.exception("yfinance failed for %s", ticker)
         return None
 
-    if hist.empty or len(hist) < 2:
+    if hist is None or hist.empty or len(hist) < 2:
         log.warning("No price data for %s around %s", ticker, trade_date)
         return None
 

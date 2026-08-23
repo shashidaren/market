@@ -7,8 +7,10 @@
 # does NOT abort later stages (bot still delivers previously stored signals
 # even if the engine produced nothing new this cycle).
 #
-# Crontab (every minute — flock prevents overlap):
+# Crontab (every minute is OK: collector skip-if-fresh means Yahoo is
+# only hit when a new 1h/4h bar may have closed. flock prevents overlap):
 #   * * * * * BASH_ENV=/opt/market/fx_signal/.env /opt/market/fx_signal/run_pipeline.sh
+# Prefer */5 if you re-install via install_cron.sh (INTERVAL_MINUTES=5).
 #
 # Credentials loaded in order:
 #   1. Environment variables already set in cron/shell

@@ -1,10 +1,11 @@
 # /opt/market/indices_signal/price_collector.py
 
-import sqlite3
 import logging
+import sqlite3
+import sys
+from pathlib import Path
 
 import pandas as pd
-import yfinance as yf
 
 from indices_config import (
     TICKERS,
@@ -14,6 +15,11 @@ from indices_config import (
     INTRADAY_LOOKBACK_DAYS,
     DAILY_LOOKBACK_DAYS,
 )
+
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+import yahoo_client  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO,
@@ -112,15 +118,22 @@ def fetch_data(symbol, timeframe):
         period,
     )
 
-    df = yf.download(
+    if yahoo_client.is_circuit_open():
+        info = yahoo_client.circuit_info()
+        logger.warning(
+            "Yahoo circuit OPEN for %.0fs (%s) — skip %s",
+            info["remaining"], info["reason"] or "no reason", symbol,
+        )
+        return pd.DataFrame()
+
+    df = yahoo_client.history(
         symbol,
         period=period,
         interval=interval,
-        progress=False,
         auto_adjust=True,
     )
 
-    if df.empty:
+    if df is None or df.empty:
         return pd.DataFrame()
 
     # Flatten yfinance multi-index columns if present

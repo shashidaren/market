@@ -84,12 +84,19 @@ def check_deps():
 
 
 def check_yahoo():
+    sys.path.insert(0, str(HERE.parent))
     try:
-        import yfinance as yf
-        df = yf.Ticker("EURUSD=X").history(period="1d", interval="1h")
-        report(not df.empty, "Yahoo Finance feed (EURUSD=X)",
-               f"latest close {df['Close'].iloc[-1]:.5f}" if not df.empty else "empty response")
-        return None if df.empty else float(df["Close"].iloc[-1])
+        import yahoo_client
+        info = yahoo_client.circuit_info()
+        if info["open"]:
+            print(f"{WARN} Yahoo circuit OPEN for {info['remaining']:.0f}s "
+                  f"— {info['reason'] or 'no reason'} "
+                  f"(reset: python3 {HERE.parent}/yahoo_client.py --reset)")
+        result = yahoo_client.probe("EURUSD=X")
+        report(result["ok"], "Yahoo Finance feed (EURUSD=X)",
+               f"latest close {result['close']:.5f}" if result["ok"]
+               else result["error"])
+        return result["close"]
     except Exception as e:
         report(False, "Yahoo Finance feed", str(e))
         return None

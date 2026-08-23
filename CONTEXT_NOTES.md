@@ -29,3 +29,23 @@ Verify: python3 indices_signal/outcome_tracker.py
 Live cron is `* * * * *` (every minute), identical to repo default.
 Repo and live server are in sync at main. The earlier "e8c8a7f"
 commit never existed.
+
+## Yahoo rate-limit hardening (2026-08-23)
+Live FX cron was 20 Yahoo `history()` calls *every minute* (10 pairs ×
+2 timeframes). That is the smoking gun for `YFRateLimitError` / empty
+frames. Fixes on this branch:
+
+- `yahoo_client.py` — shared session + file-based circuit breaker
+  (`/tmp/market-yahoo-circuit.json`, 15 min). One 429 opens the
+  circuit for *every* module on the box.
+- FX collector skip-if-fresh: if `prices.db` already has the current
+  closed bar, do not call Yahoo. Every-minute cron stays useful for
+  Telegram delivery; Yahoo is only hit after each bar close.
+- Empty-streak trip: 3 consecutive empty replies in one collector run
+  (Yahoo's silent ban signal) open the circuit. A single bad symbol
+  does not.
+- gold-watcher / indices / announcements / i_report all honour the
+  same circuit.
+
+Inspect: `python3 /opt/market/yahoo_client.py`
+Reset:   `python3 /opt/market/yahoo_client.py --reset`

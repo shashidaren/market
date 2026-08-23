@@ -85,10 +85,15 @@ def check_process():
 
 def check_yahoo():
     import config
+    sys.path.insert(0, str(HERE.parent))
     try:
-        import yfinance as yf
-        df = yf.Ticker(config.TICKER).history(period="2d", interval="1h")
-        if df.empty:
+        import yahoo_client
+        info = yahoo_client.circuit_info()
+        if info["open"]:
+            print(f"{WARN} Yahoo circuit OPEN for {info['remaining']:.0f}s "
+                  f"— {info['reason'] or 'no reason'}")
+        df = yahoo_client.history(config.TICKER, period="2d", interval="1h")
+        if df is None or df.empty:
             report(False, f"Yahoo Finance feed ({config.TICKER})", "empty response")
             return None
         price = float(df["Close"].iloc[-1])

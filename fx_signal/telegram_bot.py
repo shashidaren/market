@@ -32,7 +32,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import requests
-import yfinance as yf
 
 from fx_config import (
     ACCOUNT_BALANCE,
@@ -47,6 +46,11 @@ from fx_config import (
     STALE_WARN_PIPS,
 )
 from util import migrate_timestamps, utc_now_str
+
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+import yahoo_client  # noqa: E402
 
 try:
     from calendar_checker import get_recent_events
@@ -168,45 +172,15 @@ def get_historical_stats(
 # Live price
 # ------------------------------------------------------------------
 
-# Cache live prices per run — several queued signals can share the same
-# pair, and re-fetching fast_info for each one is wasted Yahoo calls.
-_LIVE_PRICE_CACHE: dict = {}
-
-
 def get_live_price(yf_symbol: str) -> float | None:
     """
-    Fetches the most recent price via yfinance fast_info.
+    Latest price via the shared Yahoo client.
 
-    fast_info is a FastInfo OBJECT — it does NOT support .get().
-    We use getattr() with a fallback chain. Results are cached per run
-    (one fast_info call per pair, not per signal).
+    Cached per process (TTL in yahoo_client) so several queued signals
+    on the same pair share one fast_info call. Honours the box-wide
+    circuit breaker — returns None if Yahoo is in the penalty box.
     """
-    if yf_symbol in _LIVE_PRICE_CACHE:
-        return _LIVE_PRICE_CACHE[yf_symbol]
-
-    try:
-        ticker = yf.Ticker(yf_symbol)
-        fi     = ticker.fast_info
-
-        price = getattr(fi, "last_price", None)
-        if price is None:
-            price = getattr(fi, "previous_close", None)
-            if price is not None:
-                log.warning(
-                    "%s: last_price unavailable, using previous_close=%.5f",
-                    yf_symbol, price,
-                )
-        if price is None:
-            log.warning("%s: no live price from fast_info", yf_symbol)
-            _LIVE_PRICE_CACHE[yf_symbol] = None
-            return None
-
-        _LIVE_PRICE_CACHE[yf_symbol] = float(price)
-        return float(price)
-    except Exception:
-        log.exception("Failed to fetch live price for %s", yf_symbol)
-        _LIVE_PRICE_CACHE[yf_symbol] = None
-        return None
+    return yahoo_client.last_price(yf_symbol)
 
 
 # ------------------------------------------------------------------

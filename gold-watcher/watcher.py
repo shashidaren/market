@@ -1,14 +1,21 @@
-import os
 import json
-import time
 import logging
-from logging.handlers import RotatingFileHandler
+import os
+import sys
+import time
 from datetime import datetime
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
+
 import pytz
 import requests
-import yfinance as yf
 
 import config
+
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+import yahoo_client  # noqa: E402
 
 # ── Logging Setup ────────────────────────────────────────────
 os.makedirs("logs", exist_ok=True)
@@ -50,12 +57,16 @@ def save_state(state):
 
 def fetch_gold_data():
     """Return dict with current, previous close, and daily change."""
+    if yahoo_client.is_circuit_open():
+        info = yahoo_client.circuit_info()
+        log.warning(
+            "Yahoo circuit OPEN for %.0fs (%s) — skipping cycle",
+            info["remaining"], info["reason"] or "no reason",
+        )
+        return None
     try:
-        ticker = yf.Ticker(config.TICKER)
-
-        # Get 2 days of hourly data
-        df = ticker.history(period="2d", interval="1h")
-        if df.empty:
+        df = yahoo_client.history(config.TICKER, period="2d", interval="1h")
+        if df is None or df.empty:
             log.error("No data returned")
             return None
 

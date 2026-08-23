@@ -185,6 +185,18 @@ echo "Cron jobs installed:"
 crontab -l | grep -A4 "$MARKER"
 echo
 
+# Warn about a stray every-minute pipeline line sitting OUTSIDE the
+# marker block (live-server footgun: empty managed block +
+# `* * * * * .../run_pipeline.sh`).
+unmanaged="$(crontab -l 2>/dev/null | grep -v '^#' | grep -E '^\* \* \* \* \*.*run_pipeline\.sh' || true)"
+if [[ -n "$unmanaged" ]]; then
+    echo "WARNING: every-minute run_pipeline.sh cron line(s) also present:" >&2
+    echo "$unmanaged" >&2
+    echo "         Delete those so you don't run the pipeline twice." >&2
+    echo "         skip-if-fresh makes * * * * * cheap, but two jobs still overlap." >&2
+fi
+echo
+
 # ------------------------------------------------------------------
 # Cron service check (with fallback for non-systemd)
 # ------------------------------------------------------------------
