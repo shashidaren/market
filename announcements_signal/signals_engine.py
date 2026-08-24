@@ -26,6 +26,7 @@ import sys
 from datetime import date, timedelta
 
 from collector import DB_PATH
+from ireport_filter import load_portfolio
 
 logging.basicConfig(
     level=logging.INFO,
@@ -236,11 +237,20 @@ def update_scores(conn: sqlite3.Connection, days: int = 2) -> int:
 
     alert_ready_count = 0
     skipped_count = 0
+    portfolio = load_portfolio()
 
     for (stock_code,) in stocks:
         result = score_stock_activity(conn, stock_code)
         score = result["score"]
-        alert_ready = 1 if score >= ALERT_MIN_SCORE else 0
+        # Holdings bypass the score threshold, but not warrant or tiny-filing
+        # protections. They are still filtered by i_report in telegram_bot.py
+        # (where they are explicitly exempted) and tagged HOLDING.
+        is_valid_holding = (
+            stock_code.upper() in portfolio
+            and not result["is_warrant"]
+            and max(result["total_bought"], result["total_sold"]) >= SKIP_MIN_SHARES
+        )
+        alert_ready = 1 if score >= ALERT_MIN_SCORE or is_valid_holding else 0
 
         # Update all undelivered rows for this stock
         conn.execute("""
