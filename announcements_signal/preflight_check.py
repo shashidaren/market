@@ -130,15 +130,19 @@ def check_db():
 def check_ireport():
     """Verify the i_report filter is operational (not just failing open)."""
     enabled = os.environ.get("IREPORT_FILTER", "on").lower() not in ("off", "0", "false", "no")
+    fail_open = os.environ.get("IREPORT_FAIL_OPEN", "off").lower() in ("on", "1", "true", "yes")
     if not enabled:
         print(f"{WARN} i_report filter — DISABLED via IREPORT_FILTER=off (all alerts pass)")
+        return
+    if fail_open:
+        print(f"{WARN} i_report filter — FAIL-OPEN (unavailable analysis will still alert)")
         return
     try:
         import ireport_filter
         ok = ireport_filter._load_engine()
         report(ok, "i_report filter engine",
                "loaded" if ok else f"unavailable ({ireport_filter._load_error}) — "
-               "alerts will FAIL OPEN (sent unfiltered). pip install pandas-ta-classic")
+               "alerts will be deferred until i_report is healthy. pip install pandas-ta-classic")
         pf = ireport_filter.load_portfolio()
         print(f"{OK} portfolio.txt — {len(pf)} holding(s): {sorted(pf) if pf else '(none — see portfolio.txt.example)'}")
     except Exception as e:

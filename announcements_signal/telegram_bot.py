@@ -43,10 +43,14 @@ TELEGRAM_API_BASE = "https://api.telegram.org"
 REQUEST_TIMEOUT   = 10
 
 # ── i_report filter ────────────────────────────────────────
-# Set IREPORT_FILTER=off in .env to disable filtering entirely.
+# Filtering is deliberately fail-closed by default: an unavailable i_report
+# must not turn a quiet alert stream into a dump of every filing.  Set
+# IREPORT_FAIL_OPEN=on only if you prefer delivery during outages.
 # Stocks listed in portfolio.txt always alert (📌 HOLDING).
 IREPORT_FILTER_ENABLED = os.environ.get(
     "IREPORT_FILTER", "on").lower() not in ("off", "0", "false", "no")
+IREPORT_FAIL_OPEN = os.environ.get(
+    "IREPORT_FAIL_OPEN", "off").lower() in ("on", "1", "true", "yes")
 PORTFOLIO = load_portfolio()
 
 # Score tiers for display (must align with signals_engine.py thresholds)
@@ -582,8 +586,9 @@ def main() -> None:
             # ── i_report FILTER ─────────────────────────────────
             # Portfolio stocks always alert (you own them — you want
             # to know about every insider change). Everything else
-            # must earn an actionable i_report decision. Fail-open:
-            # if analysis is unavailable, the alert still goes out.
+            # must earn an actionable i_report decision.  If analysis is
+            # unavailable, leave the row undelivered for a later retry unless
+            # IREPORT_FAIL_OPEN is explicitly enabled.
             in_portfolio = stock_code.upper() in PORTFOLIO
 
             analysis = None
@@ -592,6 +597,14 @@ def main() -> None:
 
             if in_portfolio:
                 message = "📌 <b>HOLDING</b> — you own this stock\n" + message
+            elif IREPORT_FILTER_ENABLED and analysis is None and not IREPORT_FAIL_OPEN:
+                # Do not mark delivered: the next scheduled run can retry once
+                # i_report/Yahoo is healthy. This is safer than fail-open noise.
+                log.warning(
+                    "⏸️ Deferring %s: i_report unavailable (set IREPORT_FAIL_OPEN=on to deliver anyway)",
+                    stock_code,
+                )
+                continue
             elif IREPORT_FILTER_ENABLED and analysis is not None \
                     and analysis["decision"] not in ALLOWED_DECISIONS:
                 log.info(
