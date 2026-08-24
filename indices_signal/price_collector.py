@@ -304,14 +304,14 @@ def store_dataframe(ticker_key, timeframe, df):
 # FETCH AND STORE
 # ============================================================
 
-def fetch_and_store(ticker_key, timeframe):
+def fetch_and_store(ticker_key, timeframe, period=None):
 
     cfg = TICKERS[ticker_key]
     symbol = cfg["yahoo_symbol"]
 
     try:
 
-        df = fetch_data(symbol, timeframe)
+        df = fetch_data(symbol, timeframe, period=period)
 
         if df.empty:
             logger.warning(

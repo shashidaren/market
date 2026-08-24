@@ -253,6 +253,15 @@ check_file_contains(idx_bot, r'GC=F.*FUTURES.*NOT spot', "indices telegram warni
 check_file_contains(idx_bot, r'FUTURES ROLL WINDOW',     "indices telegram warns when in roll window")
 check_file_contains(idx_bot, r'near_gc_rollover',        "indices telegram calls near_gc_rollover")
 
+# 8b. price_collector.py period kwarg regression
+idx_pc = IDX / "price_collector.py"
+check_file_contains(idx_pc,
+    r'def fetch_and_store\(ticker_key,\s*timeframe,\s*period=None\)',
+    "price_collector.fetch_and_store accepts period= kwarg")
+check_file_contains(idx_pc,
+    r'fetch_data\(symbol,\s*timeframe,\s*period=period\)',
+    "price_collector.fetch_and_store passes period to fetch_data")
+
 # Summary
 print(f"\n{BOLD}=== SUMMARY ==={NC}")
 print(f"{GREEN}PASS {len(PASS)}{NC}: {', '.join(PASS)}")
