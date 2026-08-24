@@ -47,8 +47,17 @@ def _load_engine():
         return False
 
     try:
-        if str(_IREPORT_DIR) not in sys.path:
-            sys.path.insert(0, str(_IREPORT_DIR))
+        # This repository also has a top-level app.py (the dashboard). If it
+        # was imported first, Python treats ``app`` as that module rather than
+        # i_report/app/, producing "app is not a package". Remove only that
+        # conflicting module before importing the i_report package.
+        existing_app = sys.modules.get("app")
+        if existing_app is not None and not hasattr(existing_app, "__path__"):
+            del sys.modules["app"]
+        ireport_path = str(_IREPORT_DIR)
+        if ireport_path in sys.path:
+            sys.path.remove(ireport_path)
+        sys.path.insert(0, ireport_path)
 
         from app.providers.yahoo import YahooProvider
         from app.analysis.technical import analyze_technical
