@@ -72,9 +72,9 @@ def check_yahoo():
             print(f"{WARN} Yahoo circuit OPEN for {info['remaining']:.0f}s "
                   f"— {info['reason'] or 'no reason'}")
         result = yahoo_client.probe("GC=F")
-        report(result["ok"], "Yahoo Finance feed (GC=F gold)",
-               f"latest close {result['close']:.2f}" if result["ok"]
-               else result["error"])
+        report(result["ok"], "Yahoo Finance feed (GC=F COMEX gold futures)",
+               f"latest close {result['close']:.2f} (NOT spot XAU/USD — expect $5–$20 basis)"
+               if result["ok"] else result["error"])
         return result["close"]
     except Exception as e:
         report(False, "Yahoo Finance feed", str(e))

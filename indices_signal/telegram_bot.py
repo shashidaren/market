@@ -2,6 +2,7 @@
 
 import logging
 import sqlite3
+from datetime import datetime, timezone
 
 import requests
 
@@ -119,11 +120,35 @@ def format_message(sig):
     if rec:
         msg += f"\n📈 Track record: {rec}"
 
+    # ── Data-source disclaimer (GOLD only) ─────────────────────
+    # Entry/SL/TP are computed off COMEX GC=F *futures*, which trade
+    # at a $5–$20 basis to spot XAU/USD and gap on rollover days.
+    # Don't let users mistake the printed levels for broker-exact.
+    if sig["ticker"] == "GOLD":
+        from signal_engine import near_gc_rollover
+        in_roll = near_gc_rollover(
+            datetime.now(timezone.utc),
+            days_before=SIGNAL_CONFIG.get("rollover_suppress_days_before", 1),
+            days_after=SIGNAL_CONFIG.get("rollover_suppress_days_after", 1),
+        )
+        roll_warn = (
+            "  🚨 FUTURES ROLL WINDOW — expect extra gap/basis noise."
+            if in_roll else ""
+        )
+        msg += f"""
+
+⚠️ *GOLD DATA-SOURCE WARNING*{roll_warn}
+• Prices above are COMEX `GC=F` FUTURES, NOT spot XAU/USD.
+• Expect a $5–$20 basis vs. your broker's spot Gold price.
+• Confirm LIVE spot price, SL and TP on your platform before entry.
+• Around futures roll weeks (Feb/Apr/Jun/Aug/Oct/Dec) ATR/SL/TP can distort.
+"""
+
     # f-string, NOT a plain string — a plain """...{expiry}...""" here
     # once sent the literal text "{expiry}" to Telegram.
     msg += f"""
 
-⚠️ Confirm the current XM CFD price before entering.
+⚠️ Confirm the current broker CFD price before entering.
 ⏰ Strategy: 4H Multi-Timeframe
 ⏳ Act within ~{expiry}h of the 4H close; late entries skew risk/reward.
 """

@@ -24,9 +24,20 @@ if os.path.exists(_env_file):
 
 TICKERS = {
     "GOLD": {
+        # NOTE: GC=F is the COMEX front-month gold FUTURES contract, NOT the
+        # spot XAU/USD price your broker shows. The two can diverge by $5–$20+
+        # due to contango/backwardation and will gap on futures rollover days
+        # (see ROLLOVER_DATES below). This pipeline uses GC=F because Yahoo
+        # does not reliably serve spot XAU/USD; treat every price, SL and TP
+        # as a *reference*, not a broker-exact level.
         "yahoo_symbol": "GC=F",
-        "display_name": "Gold (XAU/USD)",
+        "display_name": "Gold (COMEX GC=F — not spot XAU/USD)",
         "emoji": "🥇",
+        "data_source_note": (
+            "Price source is COMEX gold futures (GC=F), NOT spot XAU/USD. "
+            "Expect a $5–$20 basis vs. your broker; confirm live spot price "
+            "before entry and around futures roll dates."
+        ),
 
         # ATR-based stop loss / take profit
         "atr_multiplier_sl": 2.0,
@@ -144,6 +155,28 @@ SIGNAL_CONFIG = {
     # Outcome tracking / messaging
     "signal_expiry_hours": 8,   # staleness hint shown in the message
     "min_bars_for_stats": 10,   # min resolved signals before showing track record
+
+    # ── GC=F futures data-quality guards ──────────────────────────
+    #
+    # COMEX gold futures roll 6 times per year (Feb/Apr/Jun/Aug/Oct/Dec).
+    # For several days around the roll the front-month chart Yahoo serves
+    # develops artificial gaps and volume/ATR spikes that look like real
+    # moves but are purely a contract-switch artifact. These guards
+    # suppress signals in that window and when the latest 4H bar has
+    # abnormally low volume (stale contract about to roll / thin holiday).
+    #
+    # Rollover day is defined as the 3rd-last business day of the prior
+    # month (GC standard). Suppression starts N days before and ends N
+    # days after the roll date.
+    "rollover_suppress_days_before": 1,
+    "rollover_suppress_days_after": 1,
+
+    # Volume sanity check: if the most recent 4H bar's volume is less
+    # than this fraction of the median 4H volume, treat the bar as
+    # untradeable (thinning front-month / dead session) and skip.
+    "min_volume_ratio": 0.20,
+    # How many recent 4H bars to use for the median volume baseline.
+    "volume_baseline_bars": 30,
 }
 
 

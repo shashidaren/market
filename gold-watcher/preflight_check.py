@@ -94,10 +94,11 @@ def check_yahoo():
                   f"— {info['reason'] or 'no reason'}")
         df = yahoo_client.history(config.TICKER, period="2d", interval="1h")
         if df is None or df.empty:
-            report(False, f"Yahoo Finance feed ({config.TICKER})", "empty response")
+            report(False, f"Yahoo Finance feed ({config.TICKER} COMEX futures)", "empty response")
             return None
         price = float(df["Close"].iloc[-1])
-        report(True, f"Yahoo Finance feed ({config.TICKER})", f"latest {price:.2f}")
+        report(True, f"Yahoo Finance feed ({config.TICKER} = COMEX gold futures, NOT spot XAU/USD)",
+               f"latest {price:.2f} (expect $5–$20 basis vs. broker spot)")
         return price
     except Exception as e:
         report(False, "Yahoo Finance feed", str(e))

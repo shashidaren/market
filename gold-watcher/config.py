@@ -3,8 +3,23 @@
 # ═════════════════════════════════════════════════════════════
 
 # ── Data Source ──────────────────────────────────────────────
-TICKER              = "GC=F"        # Gold futures (~spot price)
+# IMPORTANT: GC=F is the COMEX front-month gold FUTURES contract,
+# NOT spot XAU/USD. The two diverge by $5–$20+ due to contango/
+# backwardation and gap sharply on futures rollover dates (3rd-last
+# business day of Jan/Mar/May/Jul/Sep/Nov, ~6× per year). We use
+# GC=F because Yahoo Finance does not reliably serve spot XAU/USD;
+# every alert carries a disclaimer.
+TICKER              = "GC=F"        # COMEX gold futures (~spot proxy)
+TICKER_LABEL        = "COMEX Gold Futures (GC=F)"
+SPOT_DISCLAIMER     = ("Note: price is COMEX GC=F futures, not spot XAU/USD. "
+                       "Expect $5–$20 basis vs. your broker; confirm spot.")
 CHECK_INTERVAL_MIN  = 15            # Check every 15 minutes
+
+# ── Rollover guard ───────────────────────────────────────────
+# Suppress target-hit / drop alerts within N days of a COMEX roll
+# date so a contract-switch gap doesn't fire a false alert.
+ROLL_SUPPRESS_DAYS_BEFORE = 1
+ROLL_SUPPRESS_DAYS_AFTER  = 1
 
 # ── Sell Targets (USD/oz) ────────────────────────────────────
 # Alert fires ONCE when price crosses ABOVE each level

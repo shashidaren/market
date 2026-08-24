@@ -64,7 +64,7 @@ def check_file_contains(path, pattern, label, should_contain=True):
         fail(label, f"read error {path}: {e}")
         return False
 
-print(f"{BOLD}=== FINAL VERIFICATION: strict + 60% confidence ==={NC}\n")
+print(f"{BOLD}=== FINAL VERIFICATION: strict + 60% confidence + GC=F data guards ==={NC}\n")
 
 # 1. fx_config.py
 print(f"{BOLD}-- fx_config.py --{NC}")
@@ -210,6 +210,49 @@ try:
 except Exception as e:
     warn("Yahoo circuit check", str(e))
 
+# 8. Gold (GC=F) data-source / rollover guards
+print(f"\n{BOLD}-- Gold GC=F data-source guards --{NC}")
+GW  = ROOT / "gold-watcher"
+IDX = ROOT / "indices_signal"
+
+# gold-watcher/config.py
+gw_cfg = GW / "config.py"
+check_file_contains(gw_cfg, r'GC=F',         "gold-watcher still uses GC=F (with caveats)")
+check_file_contains(gw_cfg, r'SPOT_DISCLAIMER', "gold-watcher config has SPOT_DISCLAIMER")
+check_file_contains(gw_cfg, r'ROLL_SUPPRESS',  "gold-watcher config has rollover suppression")
+check_file_contains(gw_cfg, r'not spot XAU/USD', "gold-watcher disclaimer names spot explicitly")
+
+# gold-watcher/watcher.py
+gw_w = GW / "watcher.py"
+check_file_contains(gw_w, r'near_gc_roll',           "gold-watcher has near_gc_roll guard")
+check_file_contains(gw_w, r'roll window active',     "gold-watcher suppresses target alerts in roll window")
+check_file_contains(gw_w, r'Data source.*SPOT_DISCLAIMER', "gold-watcher target alert carries disclaimer")
+check_file_contains(gw_w, r'Data source.*SPOT_DISCLAIMER', "gold-watcher drop alert carries disclaimer", should_contain=True)  # same banner also in drop
+check_file_contains(gw_w, r'last_roll_note',        "gold-watcher state tracks roll advisory send-date")
+
+# indices_signal/indices_config.py
+idx_cfg = IDX / "indices_config.py"
+check_file_contains(idx_cfg, r'data_source_note',  "indices GOLD config has data_source_note")
+check_file_contains(idx_cfg, r'not spot XAU/USD',  "indices GOLD config disclaimer names spot")
+check_file_contains(idx_cfg, r'rollover_suppress', "indices config has rollover-suppress config")
+check_file_contains(idx_cfg, r'min_volume_ratio',  "indices config has volume-ratio guard")
+check_file_contains(idx_cfg, r'GC=F.*NOT spot',    "indices GOLD display name no longer claims spot XAU/USD")
+
+# indices_signal/signal_engine.py
+idx_se = IDX / "signal_engine.py"
+check_file_contains(idx_se, r'def near_gc_rollover',   "indices signal_engine defines near_gc_rollover")
+check_file_contains(idx_se, r'_GC_ROLL_MONTHS',        "indices signal_engine has GC roll-month table")
+check_file_contains(idx_se, r'_latest_volume_ratio',   "indices signal_engine has volume ratio check")
+check_file_contains(idx_se, r'within GC=F futures roll window', "indices signal_engine logs roll-suppression reason")
+check_file_contains(idx_se, r'volume.*median.*thin',   "indices signal_engine has thin-volume veto")
+
+# indices_signal/telegram_bot.py
+idx_bot = IDX / "telegram_bot.py"
+check_file_contains(idx_bot, r'GOLD DATA-SOURCE WARNING', "indices telegram emits GOLD data-source warning")
+check_file_contains(idx_bot, r'GC=F.*FUTURES.*NOT spot', "indices telegram warning names GC=F vs spot")
+check_file_contains(idx_bot, r'FUTURES ROLL WINDOW',     "indices telegram warns when in roll window")
+check_file_contains(idx_bot, r'near_gc_rollover',        "indices telegram calls near_gc_rollover")
+
 # Summary
 print(f"\n{BOLD}=== SUMMARY ==={NC}")
 print(f"{GREEN}PASS {len(PASS)}{NC}: {', '.join(PASS)}")
@@ -220,6 +263,7 @@ if FAIL:
     print(f"\n{RED}{BOLD}RESULT: {len(FAIL)} FAILURE(S) - fix above{NC}")
     sys.exit(1)
 else:
-    print(f"\n{GREEN}{BOLD}RESULT: ALL CHECKS PASS ✅ - strict + 60% filter working{NC}")
-    print(f"{BOLD}Next signal should be [strict] and <60% will show ⛔ LOW CONFIDENCE{NC}")
+    print(f"\n{GREEN}{BOLD}RESULT: ALL CHECKS PASS ✅ — strict + 60% filter + GC=F data guards working{NC}")
+    print(f"{BOLD}Next signal will be [strict]; <60% confidence shows ⛔ LOW CONFIDENCE; "
+          f"gold signals carry GC=F-vs-spot disclaimer and roll-window suppression.{NC}")
     sys.exit(0)

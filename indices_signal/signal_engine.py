@@ -338,6 +338,86 @@ def remove_open_candles(
 # Standalone so they are unit-testable without a DB or yfinance.
 # ============================================================
 
+# COMEX gold futures roll months (Feb/Apr/Jun/Aug/Oct/Dec).
+# Rollover "day" is the 3rd-to-last business day of the month
+# *before* the contract month (e.g. Dec contract rolls around
+# the 3rd-last business day of November).
+_GC_ROLL_MONTHS = (2, 4, 6, 8, 10, 12)
+
+
+def _roll_dates_for_year(year: int) -> list[datetime]:
+    """Return UTC-midnight datetimes for the six GC roll days in `year`.
+
+    Roll day = 3rd-last BUSINESS day of the PRIOR month (i.e. Jan for Feb
+    contract, Mar for Apr, etc.). Weekends are skipped; we do not account
+    for US holidays — good enough for a ±1 day suppression window.
+    """
+    import calendar
+    dates = []
+    for contract_month in _GC_ROLL_MONTHS:
+        prior_month = contract_month - 1
+        y = year
+        if prior_month == 0:
+            prior_month = 12
+            y = year - 1
+        last_day = calendar.monthrange(y, prior_month)[1]
+        # Walk backwards from the last day counting business days
+        bd_count = 0
+        d = datetime(y, prior_month, last_day, tzinfo=timezone.utc)
+        target = None
+        while bd_count < 3:
+            if d.weekday() < 5:  # Mon–Fri
+                bd_count += 1
+                if bd_count == 3:
+                    target = d
+                    break
+            d -= timedelta(days=1)
+        if target is not None:
+            dates.append(target)
+    return dates
+
+
+def near_gc_rollover(now: datetime | None = None,
+                    days_before: int = 1,
+                    days_after: int = 1) -> bool:
+    """True if `now` is within [roll-day - days_before, roll-day + days_after].
+
+    Only meaningful for GOLD (GC=F). We don't try to be precise about
+    intraday timing — the entire window is suppressed so a false signal
+    from a gap can't fire.
+    """
+    if now is None:
+        now = datetime.now(timezone.utc)
+    elif now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+    else:
+        now = now.astimezone(timezone.utc)
+
+    # Check the year window around `now` to cover Dec→Jan roll.
+    for y in (now.year - 1, now.year, now.year + 1):
+        for roll in _roll_dates_for_year(y):
+            if roll - timedelta(days=days_before) <= now \
+               <= roll + timedelta(days=days_after):
+                return True
+    return False
+
+
+def _latest_volume_ratio(df_4h, n_baseline: int, bar_idx: int = -1) -> float | None:
+    """(latest 4H bar volume) / (median volume over last n_baseline bars)."""
+    if "volume" not in df_4h.columns:
+        return None
+    vols = df_4h["volume"].dropna()
+    if len(vols) < n_baseline:
+        return None
+    latest = float(vols.iloc[bar_idx])
+    baseline = float(np.median(vols.iloc[-n_baseline - 1 : -1].values))
+    if baseline <= 0:
+        return None
+    return latest / baseline
+
+
+
+
 def bar_age_hours(bar_time, now=None):
     """Hours since the completed 4H bar CLOSED (bar start + 4h)."""
 
@@ -593,6 +673,43 @@ def analyze_ticker(ticker_key):
         )
 
         return None
+
+    # ── GC=F futures data-quality guards (GOLD only) ─────────
+    if ticker_key == "GOLD":
+        # 1. Rollover-window veto. Around the 6 COMEX roll dates
+        #    per year Yahoo's GC=F chart develops artificial gaps
+        #    and ATR/volume spikes when the front month switches.
+        #    Suppress signals in that window so we don't trade on
+        #    a chart discontinuity masquerading as a breakout.
+        days_before = SIGNAL_CONFIG.get("rollover_suppress_days_before", 1)
+        days_after  = SIGNAL_CONFIG.get("rollover_suppress_days_after", 1)
+        if near_gc_rollover(datetime.now(timezone.utc),
+                            days_before=days_before,
+                            days_after=days_after):
+            logger.info(
+                "GOLD: within GC=F futures roll window (±%d/%d days) — "
+                "suppressing signal (chart gaps distort ATR/EMA/RSI)",
+                days_before, days_after,
+            )
+            return None
+
+        # 2. Volume sanity veto. If the latest completed 4H bar
+        #    has less than MIN_VOLUME_RATIO of the median recent
+        #    volume, we're on a dead/thinning contract (imminent
+        #    roll, holiday, or dead session) — prices are not
+        #    reliable enough to anchor SL/TP.
+        vol_ratio = _latest_volume_ratio(
+            df_4h,
+            n_baseline=SIGNAL_CONFIG.get("volume_baseline_bars", 30),
+        )
+        min_ratio = SIGNAL_CONFIG.get("min_volume_ratio", 0.20)
+        if vol_ratio is not None and vol_ratio < min_ratio:
+            logger.info(
+                "GOLD: latest 4H volume %.0f%% of median — too thin "
+                "(likely pre-roll or holiday); suppressing signal",
+                vol_ratio * 100,
+            )
+            return None
 
     if adx_val < SIGNAL_CONFIG["min_adx"]:
 

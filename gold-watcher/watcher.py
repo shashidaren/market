@@ -1,9 +1,10 @@
+import calendar
 import json
 import logging
 import os
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
@@ -11,6 +12,55 @@ import pytz
 import requests
 
 import config
+
+# ── GC=F rollover detection (standalone — same logic as indices_signal) ──
+# COMEX gold rolls 6×/yr: Feb/Apr/Jun/Aug/Oct/Dec contracts. The roll
+# day is the 3rd-last business day of the PRIOR month. We use this to
+# suppress alerts in a ±day window when the front-month gap can trigger
+# false "target hit" or "3% drop" alerts.
+_GC_ROLL_MONTHS = (2, 4, 6, 8, 10, 12)
+
+
+def _gc_roll_dates(year: int):
+    dates = []
+    for cm in _GC_ROLL_MONTHS:
+        pm = cm - 1
+        y = year
+        if pm == 0:
+            pm, y = 12, year - 1
+        last = calendar.monthrange(y, pm)[1]
+        d = datetime(y, pm, last, tzinfo=timezone.utc)
+        bd = 0
+        target = None
+        while bd < 3:
+            if d.weekday() < 5:
+                bd += 1
+                if bd == 3:
+                    target = d
+                    break
+            d -= timedelta(days=1)
+        if target:
+            dates.append(target)
+    return dates
+
+
+def near_gc_roll(now=None):
+    if now is None:
+        now = datetime.now(timezone.utc)
+    elif now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+    else:
+        now = now.astimezone(timezone.utc)
+    before = config.ROLL_SUPPRESS_DAYS_BEFORE
+    after  = config.ROLL_SUPPRESS_DAYS_AFTER
+    for y in (now.year - 1, now.year, now.year + 1):
+        for roll in _gc_roll_dates(y):
+            if roll - timedelta(days=before) <= now <= roll + timedelta(days=after):
+                return True, roll
+    return False, None
+
+
+
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
@@ -36,10 +86,11 @@ log = logging.getLogger(__name__)
 def load_state():
     if not os.path.exists(config.STATE_FILE):
         return {
-            "targets_hit":  [],     # list of levels already alerted
-            "last_summary": None,   # date string of last daily summary
-            "last_drop":    None,   # date of last drop alert
-            "last_price":   None,
+            "targets_hit":    [],     # list of levels already alerted
+            "last_summary":   None,   # date string of last daily summary
+            "last_drop":      None,   # date of last drop alert
+            "last_roll_note": None,   # date of last roll-window advisory
+            "last_price":     None,
         }
     try:
         with open(config.STATE_FILE, "r") as f:
@@ -125,14 +176,23 @@ def build_target_alert(target, data):
     tz = pytz.timezone(config.TIMEZONE)
     now = datetime.now(tz).strftime("%Y-%m-%d %H:%M %Z")
 
+    in_roll, roll_dt = near_gc_roll()
+    roll_warn = (
+        f"\n🚨 <b>Futures roll window</b> (roll date ~{roll_dt.strftime('%Y-%m-%d')}) — "
+        f"price gap risk elevated; verify on your broker before acting."
+        if in_roll else ""
+    )
+
     return f"""🥇 <b>GOLD TARGET HIT!</b> 🚨
 
-💰 <b>Current Price:</b>  <code>${data['price']:,.2f}</code> /oz
+💰 <b>Current Price:</b>  <code>${data['price']:,.2f}</code> /oz ({config.TICKER_LABEL})
 🎯 <b>Target Hit:</b>     <code>${target['level']:,.2f}</code>
 📈 <b>Daily Change:</b>   {data['change_pct']:+.2f}%
 
 💡 <b>Action:</b>
    {target['action']}
+{roll_warn}
+⚠️ <b>Data source:</b> {config.SPOT_DISCLAIMER}
 
 ⏰ <b>Time:</b> {now}
 
@@ -167,16 +227,23 @@ def build_daily_summary(data, state):
             target_lines.append(f"   ⏳ ${t['level']:,}  pending")
 
     change_emoji = "📈" if data["change_pct"] >= 0 else "📉"
+    in_roll, roll_dt = near_gc_roll()
+    roll_line = (
+        f"\n🚨 <b>Futures roll window</b> (≈{roll_dt.strftime('%Y-%m-%d')}) — "
+        f"expect gaps/basis noise." if in_roll else ""
+    )
 
     return f"""☀️ <b>Daily Gold Summary</b>
 
-💰 <b>Price Now:</b>       <code>${data['price']:,.2f}</code> /oz
+💰 <b>Price Now:</b>       <code>${data['price']:,.2f}</code> /oz ({config.TICKER_LABEL})
 {change_emoji} <b>Daily Change:</b>    {data['change_pct']:+.2f}%  (<code>${data['change']:+,.2f}</code>)
 
 {next_line}
 
 📊 <b>Target Progress:</b>
 <pre>{chr(10).join(target_lines)}</pre>
+{roll_line}
+⚠️ <b>Data source:</b> {config.SPOT_DISCLAIMER}
 
 ⏰ <b>Time:</b> {now}
 """
@@ -186,15 +253,24 @@ def build_drop_alert(data):
     tz = pytz.timezone(config.TIMEZONE)
     now = datetime.now(tz).strftime("%Y-%m-%d %H:%M %Z")
 
+    in_roll, roll_dt = near_gc_roll()
+    roll_warn = (
+        f"\n🚨 <b>Futures roll window</b> (≈{roll_dt.strftime('%Y-%m-%d')}) — "
+        f"the drop may be a contract-roll gap, not a real spot move. "
+        f"Verify on your broker before acting."
+        if in_roll else ""
+    )
+
     return f"""📉 <b>GOLD DROP ALERT</b>
 
-⚠️ Gold dropped <b>{data['change_pct']:.2f}%</b> today
+⚠️ Gold dropped <b>{data['change_pct']:.2f}%</b> today ({config.TICKER_LABEL})
 
 💰 <b>Current Price:</b>  <code>${data['price']:,.2f}</code> /oz
 📊 <b>Change:</b>         <code>${data['change']:,.2f}</code>
-
+{roll_warn}
 💡 <b>Potential buying opportunity</b>
    Consider dollar-cost averaging into position
+⚠️ <b>Data source:</b> {config.SPOT_DISCLAIMER}
 
 ⏰ <b>Time:</b> {now}
 """
@@ -217,11 +293,27 @@ def check_price():
     now = datetime.now(tz)
     today_str = now.strftime("%Y-%m-%d")
 
+    # ── 0. Futures roll-window guard ─────────────────────────
+    # Around COMEX roll days the GC=F price can gap $10–$30 purely
+    # from a contract switch; suppress target/drop alerts so we
+    # don't act on a data artifact. Daily summary still sends (it
+    # is informational and carries the disclaimer).
+    in_roll, roll_dt = near_gc_roll()
+    roll_alerted_today = state.get("last_roll_note") == today_str
+    if in_roll:
+        log.warning("GC=F futures roll window active (roll≈%s) — "
+                    "suppressing target/drop alerts",
+                    roll_dt.strftime("%Y-%m-%d") if roll_dt else "?")
+
     # ── 1. Target crossed check ──────────────────────────────
     for target in config.TARGETS:
         if target["level"] in state["targets_hit"]:
             continue
         if data["price"] >= target["level"]:
+            if in_roll:
+                log.info("🎯 Target $%s crossed but roll window active — alert suppressed",
+                         target["level"])
+                continue
             msg = build_target_alert(target, data)
             if send_telegram(msg):
                 state["targets_hit"].append(target["level"])
@@ -238,10 +330,27 @@ def check_price():
     # ── 3. Drop alert (once per day) ─────────────────────────
     if config.DROP_ALERT_ENABLED:
         if data["change_pct"] <= -config.DROP_ALERT_PCT and state.get("last_drop") != today_str:
-            msg = build_drop_alert(data)
-            if send_telegram(msg):
-                state["last_drop"] = today_str
-                log.info("📉 Drop alert sent")
+            if in_roll:
+                log.info("📉 Drop threshold met (%.2f%%) but roll window active — alert suppressed",
+                         data["change_pct"])
+            else:
+                msg = build_drop_alert(data)
+                if send_telegram(msg):
+                    state["last_drop"] = today_str
+                    log.info("📉 Drop alert sent")
+
+    # ── 3b. One-time roll advisory per day ───────────────────
+    # So users know target/drop alerts are intentionally silent.
+    if in_roll and not roll_alerted_today:
+        note = (f"ℹ️ <b>GC=F Futures Roll Window</b>\n\n"
+                f"Roll date ≈ <b>{roll_dt.strftime('%Y-%m-%d')}</b> UTC. "
+                f"Target-hit and drop alerts are PAUSED during this window to "
+                f"avoid false triggers from contract-switch gaps.\n"
+                f"Daily summaries continue (with disclaimer).\n\n"
+                f"⚠️ Verify spot XAU/USD on your broker before trading.")
+        if send_telegram(note):
+            state["last_roll_note"] = today_str
+            log.info("ℹ️ Roll-window advisory sent")
 
     # ── Save state ───────────────────────────────────────────
     state["last_price"] = data["price"]
