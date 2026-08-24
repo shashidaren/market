@@ -29,7 +29,7 @@ HERE = Path(__file__).parent
 DB = HERE / "prices.db"
 
 sys.path.insert(0, str(HERE))
-from util import to_db_str, utc_now_str  # noqa: E402
+from util import parse_db_ts, to_db_str, utc_now_str  # noqa: E402
 
 OK, FAIL, WARN = "\033[92m[ OK ]\033[0m", "\033[91m[FAIL]\033[0m", "\033[93m[WARN]\033[0m"
 failures = 0
@@ -151,11 +151,15 @@ def check_db():
         latest = row[0] or "none"
         fresh = False
         if row[0]:
-            age = datetime.now(timezone.utc) - datetime.fromisoformat(row[0])
-            fresh = age < timedelta(hours=2)
-            print(f"{OK if fresh else WARN} db freshness — latest 1h bar {latest} "
-                  f"({int(age.total_seconds()//60)} min old"
-                  + ("" if fresh else "; engine will skip stale bars — is cron running?") + ")")
+            parsed = parse_db_ts(row[0])
+            if parsed:
+                age = datetime.now(timezone.utc) - parsed
+                fresh = age < timedelta(hours=2)
+                print(f"{OK if fresh else WARN} db freshness — latest 1h bar {latest} "
+                      f"({int(age.total_seconds()//60)} min old"
+                      + ("" if fresh else "; engine will skip stale bars — is cron running?") + ")")
+            else:
+                print(f"{WARN} db freshness — could not parse latest bar_time {latest}")
     if "signals" in tables:
         n = con.execute("SELECT COUNT(*) FROM signals WHERE delivered=0").fetchone()[0]
         print(f"{OK} signal queue — {n} undelivered signal(s) waiting")
