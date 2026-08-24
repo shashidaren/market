@@ -143,7 +143,7 @@ $MARKER
 TELEGRAM_BOT_TOKEN=$TELEGRAM_BOT_TOKEN
 TELEGRAM_CHAT_ID=$TELEGRAM_CHAT_ID
 */$INTERVAL_MINUTES * * * * cd $SCRIPT_DIR && $PYTHON_BIN price_collector.py >> /var/log/webscrap-fx-collector.log 2>&1
-1-59/$INTERVAL_MINUTES * * * * cd $SCRIPT_DIR && SIGNAL_MODE=relaxed $PYTHON_BIN signal_engine.py >> /var/log/webscrap-fx-signal.log 2>&1
+1-59/$INTERVAL_MINUTES * * * * cd $SCRIPT_DIR && SIGNAL_MODE=strict $PYTHON_BIN signal_engine.py >> /var/log/webscrap-fx-signal.log 2>&1
 2-59/$INTERVAL_MINUTES * * * * cd $SCRIPT_DIR && $PYTHON_BIN telegram_bot.py >> /var/log/webscrap-fx-telegram.log 2>&1
 $END_MARKER
 EOF
