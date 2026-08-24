@@ -10,7 +10,8 @@ Gates applied before delivery:
     1. Signal not expired   (expires_at)
     2. Adverse drift within tolerance  (STALE_SUPPRESS_PIPS)
     3. Live R:R >= MIN_LIVE_RR
-    4. News risk check via calendar_checker
+    4. Confidence >= MIN_CONFIDENCE (default 60%)
+    5. News risk check via calendar_checker
 
 KEY FIXES vs previous version:
     - fast_info.get() replaced with attribute access (was always None)
@@ -39,6 +40,7 @@ from fx_config import (
     CONTRACT_SIZE,
     FX_PAIRS,
     MIN_BARS_FOR_STATS,
+    MIN_CONFIDENCE,
     MIN_LIVE_RR,
     MIN_LOT,
     RISK_PER_TRADE_PCT,
@@ -384,6 +386,7 @@ def format_message(
     is_warn: bool,
     is_suppress: bool,
     is_untradeable: bool,
+    is_low_conf: bool,
     technical_score: int,
     signal_health: int,
     confidence: int,
@@ -402,8 +405,13 @@ def format_message(
 
     emoji = "🟢" if direction == "BUY" else "🔴"
 
-    # ── Action banner ─────────────────────────────────────────────
-    if is_suppress or is_untradeable:
+        # ── Action banner ─────────────────────────────────────────────
+    if is_low_conf:
+        action_banner = (
+            f"⛔ <b>DO NOT EXECUTE — {direction} LOW CONFIDENCE ({confidence}% < {MIN_CONFIDENCE}%)</b>\n"
+            f"<i>Confidence below threshold — signal filtered.</i>"
+        )
+    elif is_suppress or is_untradeable:
         action_banner = (
             f"⛔ <b>DO NOT EXECUTE — {direction} SIGNAL INVALIDATED</b>\n"
             f"<i>Price moved too far from reference or R:R collapsed "
@@ -418,6 +426,7 @@ def format_message(
         action_banner = f"🚀 <b>EXECUTE: MARKET {direction} NOW</b>"
 
     # ── Scores ───────────────────────────────────────────────────
+# ── Scores ───────────────────────────────────────────────────
     score_lines = [
         f"Technical:     <code>{technical_score}/100</code>",
         f"Signal Health: <code>{signal_health}/100</code>",
@@ -729,9 +738,15 @@ def main() -> None:
                 bar_age_minutes, drift_pips, live_rr, is_4h_aligned
             )
             confidence      = compute_confidence(technical_score, signal_health)
+            is_low_conf     = confidence < MIN_CONFIDENCE
 
             # Gate logging
-            if is_suppress:
+            if is_low_conf:
+                log.warning(
+                    "%s %s id=%d: SUPPRESSED — low confidence %d%% < %d%%",
+                    direction, pair, signal_id, confidence, MIN_CONFIDENCE,
+                )
+            elif is_suppress:
                 log.warning(
                     "%s %s id=%d: SUPPRESSED — adverse drift %.1f pips",
                     direction, pair, signal_id, drift_pips,
@@ -759,7 +774,7 @@ def main() -> None:
             text = format_message(
                 row,
                 live_price, drift_pips, live_rr,
-                is_warn, is_suppress, is_untradeable,
+                is_warn, is_suppress, is_untradeable, is_low_conf,
                 technical_score, signal_health, confidence,
                 bar_age_minutes,
                 news_events,
@@ -768,7 +783,8 @@ def main() -> None:
             )
 
             # Handle suppressed signals — keep in queue for retry
-            if is_suppress or is_untradeable:
+            # Low confidence also suppressed (but logged separately)
+            if is_suppress or is_untradeable or is_low_conf:
                 notified = conn.execute(
                     "SELECT suppressed_notified_at FROM signals WHERE id = ?",
                     (signal_id,),

@@ -48,6 +48,7 @@ __all__ = [
     "STALE_WARN_PIPS",
     "STALE_SUPPRESS_PIPS",
     "MIN_LIVE_RR",
+    "MIN_CONFIDENCE",
     "N_COMPLETED_BARS",
     "MIN_BARS_FOR_STATS",
     "CALENDAR_WINDOW_MINUTES",
@@ -199,6 +200,12 @@ MIN_SL_PIPS = 5
 # drops below this, the signal is flagged DO NOT EXECUTE.
 MIN_LIVE_RR = 1.0
 
+# Minimum confidence % to deliver a signal. Below this, the signal
+# is suppressed (logged but not sent to Telegram). Override via env:
+#   MIN_CONFIDENCE=60
+# Today's EURJPY was 55% and hit SL — 60% would have filtered it.
+MIN_CONFIDENCE = int(_os.environ.get("MIN_CONFIDENCE", "60"))
+
 # Adverse drift thresholds (pips). Favourable drift (pullback toward
 # entry) is never penalised.
 #   WARN     - yellow flag, R:R degraded but still executable
@@ -270,6 +277,9 @@ def validate_config() -> None:
 
     if MIN_LIVE_RR < 0.5:
         raise ValueError(f"MIN_LIVE_RR={MIN_LIVE_RR} is dangerously low")
+
+    if not 0 <= MIN_CONFIDENCE <= 100:
+        raise ValueError(f"MIN_CONFIDENCE={MIN_CONFIDENCE} must be in [0, 100]")
 
     if STALE_SUPPRESS_PIPS <= STALE_WARN_PIPS:
         raise ValueError("STALE_SUPPRESS_PIPS must be > STALE_WARN_PIPS")
