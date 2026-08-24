@@ -285,6 +285,7 @@ def format_stock_alert(
     trades: list[dict],
     ownership: list[dict],
     streak: int,
+    bypass_price_filter: bool = False,
 ) -> str | None:
     """
     Build one Telegram HTML message per stock.
@@ -347,7 +348,7 @@ def format_stock_alert(
             log.exception("Price context failed for %s", stock_code)
 
     # FILTER: If price is stagnant (0.00%) AND insiders are selling, SUPPRESS alert
-    if price_move_pct == 0.0 and net_flow < 0:
+    if price_move_pct == 0.0 and net_flow < 0 and not bypass_price_filter:
         log.info(f"⚠️ Suppressed {stock_code}: Stagnant price (0.00%) + Insider Selling")
         return None
 
@@ -565,11 +566,16 @@ def main() -> None:
                 conn.commit()
                 continue
 
+            in_portfolio = stock_code.upper() in PORTFOLIO
             ownership = get_ownership_snapshot(conn, stock_code)
             streak    = get_activity_streak(conn, stock_code)
-            
+
+            # Holdings should receive meaningful insider activity even when
+            # price context is flat and the flow is selling; that context is
+            # useful portfolio information rather than discovery noise.
             message = format_stock_alert(
-                stock_code, stock_trades, ownership, streak
+                stock_code, stock_trades, ownership, streak,
+                bypass_price_filter=in_portfolio,
             )
 
             # If message is None, it was suppressed by filters (e.g., stagnant price)
@@ -589,8 +595,6 @@ def main() -> None:
             # must earn an actionable i_report decision.  If analysis is
             # unavailable, leave the row undelivered for a later retry unless
             # IREPORT_FAIL_OPEN is explicitly enabled.
-            in_portfolio = stock_code.upper() in PORTFOLIO
-
             analysis = None
             if IREPORT_FILTER_ENABLED:
                 analysis = analyze_stock(stock_code)
