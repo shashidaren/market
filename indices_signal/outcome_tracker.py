@@ -126,6 +126,43 @@ def print_stats(conn):
         log.info("  %s: %d trades | TP rate %.0f%%", ticker, total, rate)
     log.info("────────────────────────────────────────────────────")
 
+    # ── Score-band breakdown ─────────────────────────────────
+    # Groups resolved signals by score ranges to identify whether
+    # high-score signals actually outperform low-score ones.
+    # Helps decide whether to raise min_score or tighten scoring.
+    from indices_config import SIGNAL_CONFIG
+    bands = SIGNAL_CONFIG.get("score_bands", [])
+    if not bands:
+        return
+
+    log.info("── Score-Band Breakdown ────────────────────────────")
+    for lo, hi, label in bands:
+        band_rows = conn.execute(
+            """
+            SELECT ticker,
+                   COUNT(*) AS total,
+                   SUM(CASE WHEN outcome = 'TP_HIT' THEN 1 ELSE 0 END) AS tp,
+                   SUM(CASE WHEN outcome = 'SL_HIT' THEN 1 ELSE 0 END) AS sl,
+                   SUM(CASE WHEN outcome = 'EXPIRED' THEN 1 ELSE 0 END) AS exp
+            FROM signals_sent
+            WHERE outcome IS NOT NULL
+              AND score >= ? AND score <= ?
+            GROUP BY ticker
+            ORDER BY ticker
+            """,
+            (lo, hi),
+        ).fetchall()
+        if not band_rows:
+            log.info("  [%s]: no resolved signals", label)
+            continue
+        for ticker, total, tp, sl, exp in band_rows:
+            tp_r = (tp or 0) / total * 100 if total else 0
+            log.info(
+                "  [%s] %s: %d trades | TP %.0f%% SL %d EXPIRED %d",
+                label, ticker, total, tp_r, sl or 0, exp or 0,
+            )
+    log.info("────────────────────────────────────────────────────")
+
 
 def main():
     ensure_schema()

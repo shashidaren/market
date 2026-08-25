@@ -177,6 +177,43 @@ SIGNAL_CONFIG = {
     "min_volume_ratio": 0.20,
     # How many recent 4H bars to use for the median volume baseline.
     "volume_baseline_bars": 30,
+
+    # ── Trend alignment gate (optional stricter filter) ─────────
+    #
+    # When True, a signal is suppressed unless BOTH the daily trend
+    # AND the 4H EMA20/50 alignment agree with the signal direction.
+    # Without this gate the additive score can reach min_score (75)
+    # from daily trend alone (25) + price > EMA100 (15) + MACD cross
+    # (20) + Bollinger (10) + one more small check — even when the
+    # 4H EMA stack contradicts the daily direction.
+    #
+    # Turn on after reviewing outcome data showing mixed-trend signals
+    # underperform; leave off until then to avoid over-filtering.
+    "require_trend_alignment": False,
+
+    # ── Quick-flip policy ──────────────────────────────────────
+    #
+    # When True, an opposite-direction signal fired within the
+    # cooldown window of the previous signal is flagged in the
+    # message and logged. The signal is still sent (a real reversal
+    # can happen), but recipients are warned that the prior signal
+    # was recent. Helps track how often the engine flips direction.
+    "flag_quick_flips": True,
+
+    # ── Change of Character (ChoCH) gate ─────────────────────
+    #
+    # When True, a signal is suppressed unless price has broken
+    # above a recent swing high (for BUY) or below a recent swing
+    # low (for SELL). This confirms momentum is actually moving
+    # in the signal direction, not just indicators aligning.
+    #
+    # Swing points are detected by finding local peaks/valleys
+    # where the high/low is greater/less than N bars on each side.
+    "require_choch": True,
+    # How many bars on each side to confirm a swing point (5 = 20h on 4H)
+    "choch_swing_lookback": 5,
+    # How far back to search for swing points (20 = 80h on 4H)
+    "choch_search_window": 20,
 }
 
 

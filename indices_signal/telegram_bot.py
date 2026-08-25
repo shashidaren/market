@@ -120,6 +120,19 @@ def format_message(sig):
     if rec:
         msg += f"\n📈 Track record: {rec}"
 
+    # ── Quick-flip warning ─────────────────────────────────
+    # An opposite signal was sent within the cooldown window.
+    # The signal is still valid (genuine reversals happen), but
+    # recipients should be aware the prior direction was recent.
+    qf = sig.get("quick_flip")
+    if qf:
+        msg += (
+            f"\n\n⚠️ *QUICK FLIP* — prior {qf['prior_type']} signal "
+            f"(score {qf['prior_score']}) was sent {qf['hours_ago']}h ago. "
+            f"Exercise extra caution; direction reversals inside the "
+            f"cooldown window may indicate choppy conditions."
+        )
+
     # ── Data-source disclaimer (GOLD only) ─────────────────────
     # Entry/SL/TP are computed off COMEX GC=F *futures*, which trade
     # at a $5–$20 basis to spot XAU/USD and gap on rollover days.
@@ -161,6 +174,8 @@ def track_record(ticker):
 
     Returns e.g. "TP 62% (13 resolved)" once enough signals have
     resolved, so every message shows whether the strategy is working.
+    Also includes quick-flip performance if any flipped signals have
+    resolved.
     """
     try:
         conn = sqlite3.connect(DB_PATH)
@@ -174,11 +189,31 @@ def track_record(ticker):
             """,
             (ticker,),
         ).fetchone()
-        conn.close()
         if not total or total < min_bars:
+            conn.close()
             return None
         rate = (tp or 0) / total * 100
-        return f"TP {rate:.0f}% ({total} resolved)"
+        result = f"TP {rate:.0f}% ({total} resolved)"
+
+        # ── Quick-flip stats ─────────────────────────────────
+        # Show whether flipped signals (opposite within cooldown)
+        # have resolved differently. Helps decide whether to
+        # suppress flips entirely or keep flagging them.
+        qf_total, qf_tp = conn.execute(
+            """
+            SELECT COUNT(*),
+                   SUM(CASE WHEN outcome = 'TP_HIT' THEN 1 ELSE 0 END)
+            FROM signals_sent
+            WHERE ticker = ? AND outcome IS NOT NULL AND quick_flip = 1
+            """,
+            (ticker,),
+        ).fetchone()
+        if qf_total and qf_total >= 3:
+            qf_rate = (qf_tp or 0) / qf_total * 100
+            result += f" | Quick flips: TP {qf_rate:.0f}% ({qf_total})"
+
+        conn.close()
+        return result
     except Exception as exc:
         logger.warning("track_record failed: %s", exc)
         return None

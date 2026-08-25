@@ -67,6 +67,7 @@ def init_db():
             outcome TEXT,
             outcome_price REAL,
             resolved_at TEXT,
+            quick_flip INTEGER DEFAULT 0,
             PRIMARY KEY (ticker, sent_at)
         )
     """)
@@ -83,6 +84,7 @@ def init_db():
         ("outcome", "TEXT"),
         ("outcome_price", "REAL"),
         ("resolved_at", "TEXT"),
+        ("quick_flip", "INTEGER"),
     ):
         if col not in existing:
             cur.execute(
