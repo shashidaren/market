@@ -893,30 +893,29 @@ def analyze_ticker(ticker_key):
 
     # ── Trend alignment gate (optional) ─────────────────────
     #
-    # When require_trend_alignment is True, a signal is suppressed
-    # unless BOTH the daily trend AND the 4H EMA20/50 stack agree
-    # with the signal direction. Prevents mixed-trend setups where
-    # the additive score reaches min_score from non-trend checks
-    # alone (e.g. MACD + Bollinger + EMA100 = 45, plus one more).
+    # When require_trend_alignment is True, suppress only the
+    # *misaligned direction* by zeroing its score — do not return
+    # early. A high but misaligned BUY must not kill a valid SELL
+    # (and vice versa).
     if SIGNAL_CONFIG.get("require_trend_alignment", False):
         buy_aligned = (daily_trend == "BULL" and last["ema20"] > last["ema50"])
         sell_aligned = (daily_trend == "BEAR" and last["ema20"] < last["ema50"])
         if buy_score >= SIGNAL_CONFIG["min_score"] and not buy_aligned:
             logger.info(
                 "%s: BUY score %d meets threshold but trend misaligned "
-                "(daily=%s, EMA20/50=%s) — suppressed by alignment gate",
+                "(daily=%s, EMA20/50=%s) — BUY side suppressed",
                 ticker_key, buy_score, daily_trend,
                 "aligned" if last["ema20"] > last["ema50"] else "crossed down",
             )
-            return None
+            buy_score = 0
         if sell_score >= SIGNAL_CONFIG["min_score"] and not sell_aligned:
             logger.info(
                 "%s: SELL score %d meets threshold but trend misaligned "
-                "(daily=%s, EMA20/50=%s) — suppressed by alignment gate",
+                "(daily=%s, EMA20/50=%s) — SELL side suppressed",
                 ticker_key, sell_score, daily_trend,
                 "aligned" if last["ema20"] < last["ema50"] else "crossed up",
             )
-            return None
+            sell_score = 0
 
     if (
         buy_score
