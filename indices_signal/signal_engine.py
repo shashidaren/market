@@ -693,7 +693,32 @@ def analyze_ticker(ticker_key):
             )
             return None
 
-        # 2. Volume sanity veto. If the latest completed 4H bar
+        # 2. Volume data assertion. The volume-ratio veto below
+        #    depends on GOLD 4H volume being populated. If Yahoo
+        #    ever stops serving volume for GC=F (or the resampler
+        #    drops it), the veto silently becomes a no-op. This
+        #    explicit check catches that regression.
+        if "volume" not in df_4h.columns or df_4h["volume"].dropna().empty:
+            logger.warning(
+                "GOLD: 4H volume data missing or empty — volume veto "
+                "cannot operate; suppressing signal until data restored"
+            )
+            return None
+
+        vol_populated = (
+            df_4h["volume"].dropna().shape[0]
+            >= SIGNAL_CONFIG.get("volume_baseline_bars", 30)
+        )
+        if not vol_populated:
+            logger.warning(
+                "GOLD: insufficient volume history (%d bars, need %d) — "
+                "volume veto unreliable; suppressing signal",
+                df_4h["volume"].dropna().shape[0],
+                SIGNAL_CONFIG.get("volume_baseline_bars", 30),
+            )
+            return None
+
+        # 3. Volume sanity veto. If the latest completed 4H bar
         #    has less than MIN_VOLUME_RATIO of the median recent
         #    volume, we're on a dead/thinning contract (imminent
         #    roll, holiday, or dead session) — prices are not
@@ -865,6 +890,33 @@ def analyze_ticker(ticker_key):
     # ========================================================
 
     signal = None
+
+    # ── Trend alignment gate (optional) ─────────────────────
+    #
+    # When require_trend_alignment is True, a signal is suppressed
+    # unless BOTH the daily trend AND the 4H EMA20/50 stack agree
+    # with the signal direction. Prevents mixed-trend setups where
+    # the additive score reaches min_score from non-trend checks
+    # alone (e.g. MACD + Bollinger + EMA100 = 45, plus one more).
+    if SIGNAL_CONFIG.get("require_trend_alignment", False):
+        buy_aligned = (daily_trend == "BULL" and last["ema20"] > last["ema50"])
+        sell_aligned = (daily_trend == "BEAR" and last["ema20"] < last["ema50"])
+        if buy_score >= SIGNAL_CONFIG["min_score"] and not buy_aligned:
+            logger.info(
+                "%s: BUY score %d meets threshold but trend misaligned "
+                "(daily=%s, EMA20/50=%s) — suppressed by alignment gate",
+                ticker_key, buy_score, daily_trend,
+                "aligned" if last["ema20"] > last["ema50"] else "crossed down",
+            )
+            return None
+        if sell_score >= SIGNAL_CONFIG["min_score"] and not sell_aligned:
+            logger.info(
+                "%s: SELL score %d meets threshold but trend misaligned "
+                "(daily=%s, EMA20/50=%s) — suppressed by alignment gate",
+                ticker_key, sell_score, daily_trend,
+                "aligned" if last["ema20"] < last["ema50"] else "crossed up",
+            )
+            return None
 
     if (
         buy_score
@@ -1052,6 +1104,79 @@ def check_cooldown(
     return count == 0
 
 
+def check_quick_flip(
+    ticker_key,
+    signal_type,
+):
+    """Check whether an OPPOSITE signal was sent inside the cooldown window.
+
+    Returns a dict with flip details if found, or None. The signal is
+    still allowed through (a genuine reversal can happen), but the
+    message is annotated so recipients know the prior signal was recent.
+
+    Example:
+        BUY  at 08:00 (sent)
+        SELL at 12:00 (inside 8h cooldown)
+        → quick_flip = {"prior_type": "BUY", "hours_ago": 4.0}
+    """
+    if not SIGNAL_CONFIG.get("flag_quick_flips", True):
+        return None
+
+    opposite = "SELL" if signal_type == "BUY" else "BUY"
+
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+
+    cutoff = (
+        datetime.now(timezone.utc)
+        - timedelta(
+            hours=SIGNAL_CONFIG["cooldown_hours"]
+        )
+    ).strftime("%Y-%m-%d %H:%M:%S")
+
+    cur.execute(
+        """
+        SELECT sent_at, score
+        FROM signals_sent
+        WHERE ticker = ?
+          AND signal_type = ?
+          AND sent_at > ?
+        ORDER BY sent_at DESC
+        LIMIT 1
+        """,
+        (
+            ticker_key,
+            opposite,
+            cutoff,
+        ),
+    )
+
+    row = cur.fetchone()
+    conn.close()
+
+    if row is None:
+        return None
+
+    from util import parse_db_ts
+    prior_time = parse_db_ts(row[0])
+    hours_ago = (
+        (datetime.now(timezone.utc) - prior_time).total_seconds() / 3600.0
+        if prior_time else 0.0
+    )
+
+    logger.info(
+        "%s: QUICK FLIP — %s signal fired %.1fh after opposite %s "
+        "(score %s) within cooldown window",
+        ticker_key, signal_type, hours_ago, opposite, row[1],
+    )
+
+    return {
+        "prior_type": opposite,
+        "prior_score": row[1],
+        "hours_ago": round(hours_ago, 1),
+    }
+
+
 # ============================================================
 # SCHEMA ENSURE (outcome-tracking columns)
 # ============================================================
@@ -1075,6 +1200,7 @@ def ensure_schema(db_path=DB_PATH):
         ("outcome", "TEXT"),
         ("outcome_price", "REAL"),
         ("resolved_at", "TEXT"),
+        ("quick_flip", "INTEGER"),  # 1 if opposite signal was within cooldown
     ):
         if col not in existing:
             cur.execute(
@@ -1097,6 +1223,9 @@ def log_signal(signal):
 
     cur = conn.cursor()
 
+    # quick_flip: 1 if an opposite signal was sent within cooldown, else 0
+    qf = 1 if signal.get("quick_flip") else 0
+
     cur.execute(
         """
         INSERT INTO signals_sent
@@ -1108,9 +1237,10 @@ def log_signal(signal):
             score,
             sl,
             tp,
-            atr
+            atr,
+            quick_flip
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             signal["ticker"],
@@ -1121,6 +1251,7 @@ def log_signal(signal):
             signal["sl"],
             signal["tp"],
             signal["atr"],
+            qf,
         ),
     )
 
@@ -1168,6 +1299,18 @@ def run():
             )
 
             continue
+
+        # ── Quick-flip annotation ─────────────────────────────
+        # An opposite signal inside the cooldown window is still
+        # sent (genuine reversals happen), but flagged so the
+        # message warns recipients and the outcome tracker can
+        # measure whether flips underperform.
+        quick_flip = check_quick_flip(
+            ticker_key,
+            sig["type"],
+        )
+        if quick_flip:
+            sig["quick_flip"] = quick_flip
 
         signals.append(sig)
 

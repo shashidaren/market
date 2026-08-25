@@ -20,18 +20,18 @@ Same engine already covers **GOLD**, **US30**, and **US100**.
 
 ## 1. Data quality
 
-- [ ] Price source understood: GOLD = GC=F futures (not spot); US30/US100 = Yahoo indices (not broker CFD)
-- [ ] ≥100 closed 4H bars and ≥50 daily bars per symbol
-- [ ] GOLD 4H volume populated (volume veto depends on it)
-- [ ] Timestamps in `YYYY-MM-DD HH:MM:SS` (outcome tracker needs this)
+- [x] Price source understood: GOLD = GC=F futures (not spot); US30/US100 = Yahoo indices (not broker CFD) — disclaimers in `indices_config.py` and message footer
+- [x] ≥100 closed 4H bars and ≥50 daily bars per symbol — enforced via `min_4h_candles` / `min_1d_candles`
+- [x] GOLD 4H volume populated (volume veto depends on it) — explicit assertion in `analyze_ticker` suppresses signal if volume data missing or insufficient
+- [x] Timestamps in `YYYY-MM-DD HH:MM:SS` (outcome tracker needs this) — `util.utc_now_str()` + `migrate_timestamps()`
 
 ## 2. Signal logic
 
-- [ ] Validate or raise `min_score` (75 is reachable without RSI)
-- [ ] Optional: require daily trend **and** 4H EMA20/50 alignment
+- [ ] Validate or raise `min_score` (75 is reachable without RSI) — review after outcome stats accumulate
+- [x] Optional: require daily trend **and** 4H EMA20/50 alignment — `require_trend_alignment` flag in `SIGNAL_CONFIG` (default off; turn on after reviewing outcome data)
 - [ ] Revisit `min_adx` and per-ticker `min_atr` after outcome stats exist
 - [ ] RSI buy/sell zones still make sense vs live outcomes
-- [ ] Policy on quick flips (opposite signal inside cooldown window)
+- [x] Policy on quick flips (opposite signal inside cooldown window) — `check_quick_flip()` detects and flags; `flag_quick_flips` config (default on); message warns recipients; tracked in `signals_sent.quick_flip` column; stats shown in track record
 
 ## 3. Risk geometry
 
@@ -42,7 +42,7 @@ Same engine already covers **GOLD**, **US30**, and **US100**.
 ## 4. Outcome evidence (before changing rules)
 
 - [ ] ≥10–20 resolved outcomes per symbol (or overall)
-- [ ] TP rate reviewed by symbol and score band
+- [ ] TP rate reviewed by symbol and score band — `outcome_tracker.print_stats()` now breaks down by `score_bands` from config; `track_record()` in messages shows quick-flip stats
 - [ ] Logs show stale / rollover / thin-volume / RSI vetoes blocking bad setups
 - [ ] No rule changes based only on a handful of live signals
 

@@ -177,6 +177,40 @@ SIGNAL_CONFIG = {
     "min_volume_ratio": 0.20,
     # How many recent 4H bars to use for the median volume baseline.
     "volume_baseline_bars": 30,
+
+    # ── Trend alignment gate (optional stricter filter) ─────────
+    #
+    # When True, a signal is suppressed unless BOTH the daily trend
+    # AND the 4H EMA20/50 alignment agree with the signal direction.
+    # Without this gate the additive score can reach min_score (75)
+    # from daily trend alone (25) + price > EMA100 (15) + MACD cross
+    # (20) + Bollinger (10) + one more small check — even when the
+    # 4H EMA stack contradicts the daily direction.
+    #
+    # Turn on after reviewing outcome data showing mixed-trend signals
+    # underperform; leave off until then to avoid over-filtering.
+    "require_trend_alignment": False,
+
+    # ── Quick-flip policy ──────────────────────────────────────
+    #
+    # When True, an opposite-direction signal fired within the
+    # cooldown window of the previous signal is flagged in the
+    # message and logged. The signal is still sent (a real reversal
+    # can happen), but recipients are warned that the prior signal
+    # was recent. Helps track how often the engine flips direction.
+    "flag_quick_flips": True,
+
+    # ── Score bands for outcome tracking ───────────────────────
+    #
+    # Resolved signals are grouped by these bands when printing
+    # track-record statistics. Helps identify whether high-score
+    # signals actually outperform low-score ones.
+    "score_bands": [
+        (75, 79, "75-79"),
+        (80, 84, "80-84"),
+        (85, 89, "85-89"),
+        (90, 100, "90-100"),
+    ],
 }
 
 
