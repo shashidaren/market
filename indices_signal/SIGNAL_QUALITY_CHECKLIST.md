@@ -32,6 +32,7 @@ Same engine already covers **GOLD**, **US30**, and **US100**.
 - [ ] Revisit `min_adx` and per-ticker `min_atr` after outcome stats exist
 - [ ] RSI buy/sell zones still make sense vs live outcomes
 - [x] Policy on quick flips (opposite signal inside cooldown window) — `check_quick_flip()` detects and flags; `flag_quick_flips` config (default on); message warns recipients; tracked in `signals_sent.quick_flip` column; stats shown in track record
+- [x] **Break of Structure (BOS) gate** — `require_bos` flag in `SIGNAL_CONFIG` (default on); requires price to break above recent swing high (BUY) or below recent swing low (SELL) before signal fires; confirms the trend is continuing (BOS = Break of Structure), not just indicators aligning; `bos_swing_lookback` (5 bars) and `bos_search_window` (20 bars) control sensitivity; shows "BOS confirmed" in Telegram reasons
 
 ## 3. Risk geometry
 

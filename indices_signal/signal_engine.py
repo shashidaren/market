@@ -416,6 +416,106 @@ def _latest_volume_ratio(df_4h, n_baseline: int, bar_idx: int = -1) -> float | N
     return latest / baseline
 
 
+def detect_swing_points(df, lookback: int = 5):
+    """Find swing highs and lows in the dataframe.
+
+    A swing high is a bar where the high is greater than the highs
+    of `lookback` bars on each side. A swing low is where the low
+    is less than the lows of `lookback` bars on each side.
+
+    Returns (swing_highs, swing_lows) as lists of (index, price) tuples.
+    """
+    swing_highs = []
+    swing_lows = []
+
+    if len(df) < 2 * lookback + 1:
+        return swing_highs, swing_lows
+
+    for i in range(lookback, len(df) - lookback):
+        # Check swing high
+        is_high = True
+        for j in range(i - lookback, i + lookback + 1):
+            if j == i:
+                continue
+            if df.iloc[j]["high"] >= df.iloc[i]["high"]:
+                is_high = False
+                break
+        if is_high:
+            swing_highs.append((i, df.iloc[i]["high"]))
+
+        # Check swing low
+        is_low = True
+        for j in range(i - lookback, i + lookback + 1):
+            if j == i:
+                continue
+            if df.iloc[j]["low"] <= df.iloc[i]["low"]:
+                is_low = False
+                break
+        if is_low:
+            swing_lows.append((i, df.iloc[i]["low"]))
+
+    return swing_highs, swing_lows
+
+
+def check_bos(df, signal_type: str, lookback: int = 5, search_window: int = 20) -> bool:
+    """Check if Break of Structure occurred for the signal direction.
+
+    BUY: current close must be above the most recent swing high
+    SELL: current close must be below the most recent swing low
+
+    Returns True if BOS confirmed, False otherwise.
+    """
+    if len(df) < lookback * 2 + search_window:
+        logger.info("BOS: insufficient data (%d bars)", len(df))
+        return False
+
+    # Get recent data window
+    recent = df.iloc[-search_window:]
+    swing_highs, swing_lows = detect_swing_points(recent, lookback)
+
+    current_close = df.iloc[-1]["close"]
+
+    if signal_type == "BUY":
+        if not swing_highs:
+            logger.info("BOS BUY: no swing highs found in window")
+            return False
+        # Get the most recent swing high
+        last_swing_high = swing_highs[-1][1]
+        if current_close > last_swing_high:
+            logger.info(
+                "BOS BUY: confirmed — price %.2f broke above swing high %.2f",
+                current_close, last_swing_high,
+            )
+            return True
+        else:
+            logger.info(
+                "BOS BUY: not confirmed — price %.2f below swing high %.2f",
+                current_close, last_swing_high,
+            )
+            return False
+
+    elif signal_type == "SELL":
+        if not swing_lows:
+            logger.info("BOS SELL: no swing lows found in window")
+            return False
+        # Get the most recent swing low
+        last_swing_low = swing_lows[-1][1]
+        if current_close < last_swing_low:
+            logger.info(
+                "BOS SELL: confirmed — price %.2f broke below swing low %.2f",
+                current_close, last_swing_low,
+            )
+            return True
+        else:
+            logger.info(
+                "BOS SELL: not confirmed — price %.2f above swing low %.2f",
+                current_close, last_swing_low,
+            )
+            return False
+
+    return False
+
+
 
 
 def bar_age_hours(bar_time, now=None):
@@ -917,6 +1017,43 @@ def analyze_ticker(ticker_key):
             )
             sell_score = 0
 
+    # ── Break of Structure (BOS) gate ──────────────────────
+    #
+    # When require_bos is True, a signal is suppressed unless
+    # price has broken above a recent swing high (for BUY) or
+    # below a recent swing low (for SELL). This confirms the trend
+    # is continuing (BOS = Break of Structure), not just indicators
+    # aligning on a rising/falling price that hasn't proven it can
+    # break key levels yet.
+    if SIGNAL_CONFIG.get("require_bos", False):
+        # Determine which direction would win
+        if (buy_score >= SIGNAL_CONFIG["min_score"]
+            and buy_score > sell_score):
+            if not check_bos(
+                df, "BUY",
+                lookback=SIGNAL_CONFIG.get("bos_swing_lookback", 5),
+                search_window=SIGNAL_CONFIG.get("bos_search_window", 20),
+            ):
+                logger.info(
+                    "%s: BUY suppressed — no Break of Structure "
+                    "(price hasn't broken above recent swing high)",
+                    ticker_key,
+                )
+                return None
+        elif (sell_score >= SIGNAL_CONFIG["min_score"]
+              and sell_score > buy_score):
+            if not check_bos(
+                df, "SELL",
+                lookback=SIGNAL_CONFIG.get("bos_swing_lookback", 5),
+                search_window=SIGNAL_CONFIG.get("bos_search_window", 20),
+            ):
+                logger.info(
+                    "%s: SELL suppressed — no Break of Structure "
+                    "(price hasn't broken below recent swing low)",
+                    ticker_key,
+                )
+                return None
+
     if (
         buy_score
         >= SIGNAL_CONFIG["min_score"]
@@ -952,6 +1089,10 @@ def analyze_ticker(ticker_key):
                 * cfg["atr_multiplier_tp"]
             )
         )
+
+        # Add BOS confirmation to reasons if enabled
+        if SIGNAL_CONFIG.get("require_bos", False):
+            buy_reasons.append("BOS confirmed (broke swing high)")
 
         signal = {
             "ticker": ticker_key,
@@ -1002,6 +1143,10 @@ def analyze_ticker(ticker_key):
                 * cfg["atr_multiplier_tp"]
             )
         )
+
+        # Add BOS confirmation to reasons if enabled
+        if SIGNAL_CONFIG.get("require_bos", False):
+            sell_reasons.append("BOS confirmed (broke swing low)")
 
         signal = {
             "ticker": ticker_key,

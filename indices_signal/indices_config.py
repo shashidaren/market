@@ -211,6 +211,20 @@ SIGNAL_CONFIG = {
         (85, 89, "85-89"),
         (90, 100, "90-100"),
     ],
+    # ── Break of Structure (BOS) gate ─────────────────────────
+    #
+    # When True, a signal is suppressed unless price has broken
+    # above a recent swing high (for BUY) or below a recent swing
+    # low (for SELL). This confirms the trend is continuing (BOS =
+    # Break of Structure), not just indicators aligning.
+    #
+    # Swing points are detected by finding local peaks/valleys
+    # where the high/low is greater/less than N bars on each side.
+    "require_bos": True,
+    # How many bars on each side to confirm a swing point (5 = 20h on 4H)
+    "bos_swing_lookback": 5,
+    # How far back to search for swing points (20 = 80h on 4H)
+    "bos_search_window": 20,
 }
 
 
