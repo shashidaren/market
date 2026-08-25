@@ -457,16 +457,16 @@ def detect_swing_points(df, lookback: int = 5):
     return swing_highs, swing_lows
 
 
-def check_choch(df, signal_type: str, lookback: int = 5, search_window: int = 20) -> bool:
-    """Check if Change of Character occurred for the signal direction.
+def check_bos(df, signal_type: str, lookback: int = 5, search_window: int = 20) -> bool:
+    """Check if Break of Structure occurred for the signal direction.
 
     BUY: current close must be above the most recent swing high
     SELL: current close must be below the most recent swing low
 
-    Returns True if ChoCH confirmed, False otherwise.
+    Returns True if BOS confirmed, False otherwise.
     """
     if len(df) < lookback * 2 + search_window:
-        logger.info("ChoCH: insufficient data (%d bars)", len(df))
+        logger.info("BOS: insufficient data (%d bars)", len(df))
         return False
 
     # Get recent data window
@@ -477,38 +477,38 @@ def check_choch(df, signal_type: str, lookback: int = 5, search_window: int = 20
 
     if signal_type == "BUY":
         if not swing_highs:
-            logger.info("ChoCH BUY: no swing highs found in window")
+            logger.info("BOS BUY: no swing highs found in window")
             return False
         # Get the most recent swing high
         last_swing_high = swing_highs[-1][1]
         if current_close > last_swing_high:
             logger.info(
-                "ChoCH BUY: confirmed — price %.2f broke above swing high %.2f",
+                "BOS BUY: confirmed — price %.2f broke above swing high %.2f",
                 current_close, last_swing_high,
             )
             return True
         else:
             logger.info(
-                "ChoCH BUY: not confirmed — price %.2f below swing high %.2f",
+                "BOS BUY: not confirmed — price %.2f below swing high %.2f",
                 current_close, last_swing_high,
             )
             return False
 
     elif signal_type == "SELL":
         if not swing_lows:
-            logger.info("ChoCH SELL: no swing lows found in window")
+            logger.info("BOS SELL: no swing lows found in window")
             return False
         # Get the most recent swing low
         last_swing_low = swing_lows[-1][1]
         if current_close < last_swing_low:
             logger.info(
-                "ChoCH SELL: confirmed — price %.2f broke below swing low %.2f",
+                "BOS SELL: confirmed — price %.2f broke below swing low %.2f",
                 current_close, last_swing_low,
             )
             return True
         else:
             logger.info(
-                "ChoCH SELL: not confirmed — price %.2f above swing low %.2f",
+                "BOS SELL: not confirmed — price %.2f above swing low %.2f",
                 current_close, last_swing_low,
             )
             return False
@@ -1018,38 +1018,38 @@ def analyze_ticker(ticker_key):
             )
             return None
 
-    # ── Change of Character (ChoCH) gate ───────────────────
+    # ── Break of Structure (BOS) gate ──────────────────────
     #
-    # When require_choch is True, a signal is suppressed unless
+    # When require_bos is True, a signal is suppressed unless
     # price has broken above a recent swing high (for BUY) or
-    # below a recent swing low (for SELL). This confirms momentum
-    # is actually moving in the signal direction, not just
-    # indicators aligning on a rising/falling price that hasn't
-    # proven it can break key levels yet.
-    if SIGNAL_CONFIG.get("require_choch", False):
+    # below a recent swing low (for SELL). This confirms the trend
+    # is continuing (BOS = Break of Structure), not just indicators
+    # aligning on a rising/falling price that hasn't proven it can
+    # break key levels yet.
+    if SIGNAL_CONFIG.get("require_bos", False):
         # Determine which direction would win
         if (buy_score >= SIGNAL_CONFIG["min_score"]
             and buy_score > sell_score):
-            if not check_choch(
+            if not check_bos(
                 df, "BUY",
-                lookback=SIGNAL_CONFIG.get("choch_swing_lookback", 5),
-                search_window=SIGNAL_CONFIG.get("choch_search_window", 20),
+                lookback=SIGNAL_CONFIG.get("bos_swing_lookback", 5),
+                search_window=SIGNAL_CONFIG.get("bos_search_window", 20),
             ):
                 logger.info(
-                    "%s: BUY suppressed — no Change of Character "
+                    "%s: BUY suppressed — no Break of Structure "
                     "(price hasn't broken above recent swing high)",
                     ticker_key,
                 )
                 return None
         elif (sell_score >= SIGNAL_CONFIG["min_score"]
               and sell_score > buy_score):
-            if not check_choch(
+            if not check_bos(
                 df, "SELL",
-                lookback=SIGNAL_CONFIG.get("choch_swing_lookback", 5),
-                search_window=SIGNAL_CONFIG.get("choch_search_window", 20),
+                lookback=SIGNAL_CONFIG.get("bos_swing_lookback", 5),
+                search_window=SIGNAL_CONFIG.get("bos_search_window", 20),
             ):
                 logger.info(
-                    "%s: SELL suppressed — no Change of Character "
+                    "%s: SELL suppressed — no Break of Structure "
                     "(price hasn't broken below recent swing low)",
                     ticker_key,
                 )
@@ -1091,9 +1091,9 @@ def analyze_ticker(ticker_key):
             )
         )
 
-        # Add ChoCH confirmation to reasons if enabled
-        if SIGNAL_CONFIG.get("require_choch", False):
-            buy_reasons.append("ChoCH confirmed (broke swing high)")
+        # Add BOS confirmation to reasons if enabled
+        if SIGNAL_CONFIG.get("require_bos", False):
+            buy_reasons.append("BOS confirmed (broke swing high)")
 
         signal = {
             "ticker": ticker_key,
@@ -1145,9 +1145,9 @@ def analyze_ticker(ticker_key):
             )
         )
 
-        # Add ChoCH confirmation to reasons if enabled
-        if SIGNAL_CONFIG.get("require_choch", False):
-            sell_reasons.append("ChoCH confirmed (broke swing low)")
+        # Add BOS confirmation to reasons if enabled
+        if SIGNAL_CONFIG.get("require_bos", False):
+            sell_reasons.append("BOS confirmed (broke swing low)")
 
         signal = {
             "ticker": ticker_key,

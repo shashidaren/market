@@ -200,20 +200,20 @@ SIGNAL_CONFIG = {
     # was recent. Helps track how often the engine flips direction.
     "flag_quick_flips": True,
 
-    # ── Change of Character (ChoCH) gate ─────────────────────
+    # ── Break of Structure (BOS) gate ─────────────────────────
     #
     # When True, a signal is suppressed unless price has broken
     # above a recent swing high (for BUY) or below a recent swing
-    # low (for SELL). This confirms momentum is actually moving
-    # in the signal direction, not just indicators aligning.
+    # low (for SELL). This confirms the trend is continuing (BOS =
+    # Break of Structure), not just indicators aligning.
     #
     # Swing points are detected by finding local peaks/valleys
     # where the high/low is greater/less than N bars on each side.
-    "require_choch": True,
+    "require_bos": True,
     # How many bars on each side to confirm a swing point (5 = 20h on 4H)
-    "choch_swing_lookback": 5,
+    "bos_swing_lookback": 5,
     # How far back to search for swing points (20 = 80h on 4H)
-    "choch_search_window": 20,
+    "bos_search_window": 20,
 }
 
 
