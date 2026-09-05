@@ -12,12 +12,19 @@
 #        ↓
 # telegram_bot.py
 #
-# Run after each 4H candle boundary.
+# Credentials loaded in order:
+#   1. Environment already set
+#   2. /opt/market/.env            (single source of truth)
+#   3. /opt/market/indices_signal/.env  (migration fallback)
+#
+# Crontab example:
+#   */30 * * * * BASH_ENV=/opt/market/.env /opt/market/indices_signal/run_pipeline.sh
 #
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 LOCKFILE="/tmp/indices_signal_pipeline.lock"
 
@@ -25,18 +32,19 @@ LOGFILE="/var/log/webscrap-indices-pipeline.log"
 
 
 # ============================================================
-# ENVIRONMENT
+# ENVIRONMENT — root first, module-local fallback
 # ============================================================
 
-if [[ -f "$SCRIPT_DIR/.env" ]]; then
-
+if [[ -f "$REPO_ROOT/.env" ]]; then
+    # shellcheck disable=SC1091
+    source "$REPO_ROOT/.env"
+elif [[ -f "$SCRIPT_DIR/.env" ]]; then
     # shellcheck disable=SC1091
     source "$SCRIPT_DIR/.env"
-
-    export TELEGRAM_BOT_TOKEN
-    export TELEGRAM_CHAT_ID
-
 fi
+
+export TELEGRAM_BOT_TOKEN="${TELEGRAM_BOT_TOKEN:-}"
+export TELEGRAM_CHAT_ID="${TELEGRAM_CHAT_ID:-}"
 
 
 # ============================================================
