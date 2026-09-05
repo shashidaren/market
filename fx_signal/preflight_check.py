@@ -26,10 +26,13 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 HERE = Path(__file__).parent
+REPO_ROOT = HERE.parent
 DB = HERE / "prices.db"
 
 sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(REPO_ROOT))
 from util import to_db_str, utc_now_str  # noqa: E402
+from env_loader import load_env  # noqa: E402
 
 OK, FAIL, WARN = "\033[92m[ OK ]\033[0m", "\033[91m[FAIL]\033[0m", "\033[93m[WARN]\033[0m"
 failures = 0
@@ -53,23 +56,15 @@ def report(ok, label, detail=""):
     print(f"{OK if ok else FAIL} {label}" + (f" — {detail}" if detail else ""))
 
 
-def load_env():
-    env_path = HERE / ".env"
-    if env_path.exists():
-        for line in env_path.read_text().splitlines():
-            line = line.strip()
-            if line and not line.startswith("#") and "=" in line:
-                k, _, v = line.partition("=")
-                os.environ.setdefault(k.strip(), v.strip())
-
-
 def check_env():
-    load_env()
+    root = load_env(local_dir=HERE, force=True)
+    print(f"{OK if root.is_file() else WARN} secrets file — {root}"
+          + ("" if root.is_file() else " missing (create from .env.example)"))
     for key, required in [("TELEGRAM_BOT_TOKEN", True), ("TELEGRAM_CHAT_ID", True),
                           ("SIGNAL_MODE", False), ("FINNHUB_API_KEY", False)]:
         val = os.environ.get(key, "")
         if required:
-            report(bool(val), f"env: {key}", "set" if val else "MISSING — check .env")
+            report(bool(val), f"env: {key}", "set" if val else "MISSING — put in /opt/market/.env")
         else:
             print(f"{OK if val else WARN} env: {key} — {'set' if val else 'not set (optional)'}")
 
