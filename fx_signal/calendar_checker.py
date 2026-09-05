@@ -27,6 +27,8 @@ HIGH_IMPACT_KEYWORDS = [
     "CPI", "inflation", "GDP", "ECB", "Bank of England", "BOE",
     "Bank of Japan", "BOJ", "Reserve Bank", "PMI", "unemployment",
     "retail sales", "trade balance", "central bank",
+    # crypto-relevant
+    "bitcoin", "BTC", "SEC", "ETF",
 ]
 
 CURRENCY_TO_TERMS = {
@@ -38,6 +40,7 @@ CURRENCY_TO_TERMS = {
     "CAD": ["CAD", "loonie", "Bank of Canada", "BOC"],
     "CHF": ["CHF", "franc", "Swiss National Bank", "SNB"],
     "NZD": ["NZD", "kiwi", "Reserve Bank of New Zealand", "RBNZ"],
+    "BTC": ["BTC", "bitcoin", "crypto"],
 }
 
 
@@ -93,11 +96,13 @@ def get_recent_events(
         return []
 
     try:
+        # Forex category for FX pairs; general/crypto-friendly for BTC
+        category = "crypto" if cfg.get("base") == "BTC" else "forex"
         response = requests.get(
             f"{FINNHUB_API_BASE}/news",
             params={
                 "token":    api_key,
-                "category": "forex",
+                "category": category,
             },
             timeout=REQUEST_TIMEOUT,
         )
