@@ -67,6 +67,8 @@ __all__ = [
     "MIN_LOT",
     "CONTRACT_SIZE",
     "validate_config",
+    "get_stale_thresholds",
+    "get_min_sl_pips",
 ]
 
 
@@ -163,16 +165,20 @@ FX_PAIRS = {
     },
 
     # --- Crypto (Yahoo uses BTC-USD, not BTCUSD=X) ---
-    # pip_size=1.0 → 1 "pip" = $1. Global STALE_WARN/SUPPRESS (15/30)
-    # are tight for BTC; expect more WARN/SUPPRESS on fast moves until
-    # pair-specific thresholds are added. ATR multiples kept modest.
+    # pip_size=1.0 → 1 "pip" = $1. Pair-level stale_* override the global
+    # 15/30 which are sized for FX majors, not dollar-priced BTC.
     "BTCUSD": {
-        "yf_symbol":    "BTC-USD",
-        "atr_mult_sl":  1.5,
-        "atr_mult_tp":  2.0,
-        "pip_size":     1.0,
-        "base":         "BTC",
-        "quote":        "USD",
+        "yf_symbol":           "BTC-USD",
+        "atr_mult_sl":         1.5,
+        "atr_mult_tp":         2.0,
+        "pip_size":            1.0,
+        "base":                "BTC",
+        "quote":               "USD",
+        # ~$200 warn / ~$500 suppress — noise vs meaningful adverse move
+        "stale_warn_pips":     200,
+        "stale_suppress_pips": 500,
+        # Floor SL distance ($50) so a quiet ATR cannot set a $5 stop
+        "min_sl_pips":         50,
     },
 }
 
@@ -261,6 +267,27 @@ MIN_LOT = 0.01
 # different contract units for crypto.
 CONTRACT_SIZE = 100_000
 
+
+# ------------------------------------------------------------------
+# Per-pair threshold helpers
+# ------------------------------------------------------------------
+def get_stale_thresholds(pair: str) -> tuple[float, float]:
+    """
+    Return (warn_pips, suppress_pips) for a pair.
+    Pair dict may override STALE_WARN_PIPS / STALE_SUPPRESS_PIPS.
+    """
+    cfg = FX_PAIRS.get(pair, {})
+    warn = float(cfg.get("stale_warn_pips", STALE_WARN_PIPS))
+    suppress = float(cfg.get("stale_suppress_pips", STALE_SUPPRESS_PIPS))
+    return warn, suppress
+
+
+def get_min_sl_pips(pair: str) -> float:
+    """Minimum SL distance in pips; pair may override MIN_SL_PIPS."""
+    cfg = FX_PAIRS.get(pair, {})
+    return float(cfg.get("min_sl_pips", MIN_SL_PIPS))
+
+
 # ------------------------------------------------------------------
 # Runtime validation
 # ------------------------------------------------------------------
@@ -300,6 +327,15 @@ def validate_config() -> None:
 
     if STALE_SUPPRESS_PIPS <= STALE_WARN_PIPS:
         raise ValueError("STALE_SUPPRESS_PIPS must be > STALE_WARN_PIPS")
+
+    for pair, cfg in FX_PAIRS.items():
+        w, s = get_stale_thresholds(pair)
+        if s <= w:
+            raise ValueError(
+                f"FX_PAIRS['{pair}'] stale_suppress_pips ({s}) must be > stale_warn_pips ({w})"
+            )
+        if get_min_sl_pips(pair) <= 0:
+            raise ValueError(f"FX_PAIRS['{pair}'] min_sl_pips must be > 0")
 
     if N_COMPLETED_BARS < 2:
         raise ValueError("N_COMPLETED_BARS must be >= 2 for crossover detection")
