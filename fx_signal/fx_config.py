@@ -16,17 +16,27 @@ execution parameters without touching logic code.
 #   python3 telegram_bot.py / signal_engine.py / preflight_check.py ...
 # Variables already exported (e.g. by cron / run_pipeline.sh) win —
 # setdefault never overrides an existing environment variable.
+# Also loads repo-root /opt/market/.env via env_loader when available.
 # ------------------------------------------------------------------
 import os as _os
+import sys as _sys
+from pathlib import Path as _Path
 
-_env_file = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), ".env")
-if _os.path.exists(_env_file):
-    with open(_env_file) as _f:
-        for _line in _f:
-            _line = _line.strip()
-            if _line and not _line.startswith("#") and "=" in _line:
-                _k, _, _v = _line.partition("=")
-                _os.environ.setdefault(_k.strip(), _v.strip().strip('\'"'))
+_REPO_ROOT = _Path(__file__).resolve().parent.parent
+if str(_REPO_ROOT) not in _sys.path:
+    _sys.path.insert(0, str(_REPO_ROOT))
+try:
+    from env_loader import load_env as _load_env
+    _load_env(local_dir=_Path(__file__).resolve().parent)
+except Exception:
+    _env_file = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), ".env")
+    if _os.path.exists(_env_file):
+        with open(_env_file) as _f:
+            for _line in _f:
+                _line = _line.strip()
+                if _line and not _line.startswith("#") and "=" in _line:
+                    _k, _, _v = _line.partition("=")
+                    _os.environ.setdefault(_k.strip(), _v.strip().strip('\'"'))
 
 
 # ------------------------------------------------------------------
@@ -151,6 +161,19 @@ FX_PAIRS = {
         "base":         "EUR",
         "quote":        "GBP",
     },
+
+    # --- Crypto (Yahoo uses BTC-USD, not BTCUSD=X) ---
+    # pip_size=1.0 → 1 "pip" = $1. Global STALE_WARN/SUPPRESS (15/30)
+    # are tight for BTC; expect more WARN/SUPPRESS on fast moves until
+    # pair-specific thresholds are added. ATR multiples kept modest.
+    "BTCUSD": {
+        "yf_symbol":    "BTC-USD",
+        "atr_mult_sl":  1.5,
+        "atr_mult_tp":  2.0,
+        "pip_size":     1.0,
+        "base":         "BTC",
+        "quote":        "USD",
+    },
 }
 
 # ------------------------------------------------------------------
@@ -234,6 +257,8 @@ RISK_PER_TRADE_PCT = float(_os.environ.get("RISK_PER_TRADE_PCT", "1.0"))
 # Smallest tradable size (0.01 = 1,000 units at most brokers).
 MIN_LOT = 0.01
 # Standard contract size (1.00 lot = 100,000 units of base currency).
+# Note: BTC sizing in Telegram is illustrative only — brokers use
+# different contract units for crypto.
 CONTRACT_SIZE = 100_000
 
 # ------------------------------------------------------------------
@@ -247,13 +272,15 @@ def validate_config() -> None:
         "yf_symbol", "atr_mult_sl", "atr_mult_tp",
         "pip_size", "base", "quote",
     }
+    # FX majors use 0.0001 / 0.01; crypto (e.g. BTC) uses 1.0 ($1 = 1 pip).
+    allowed_pip_sizes = {0.0001, 0.01, 1.0}
 
     for pair, cfg in FX_PAIRS.items():
         missing = required_keys - set(cfg.keys())
         if missing:
             raise ValueError(f"FX_PAIRS['{pair}'] missing keys: {missing}")
 
-        if cfg["pip_size"] not in (0.0001, 0.01):
+        if cfg["pip_size"] not in allowed_pip_sizes:
             raise ValueError(
                 f"FX_PAIRS['{pair}'] has unexpected pip_size {cfg['pip_size']}"
             )
