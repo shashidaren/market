@@ -7,12 +7,13 @@
 # does NOT abort later stages (bot still delivers previously stored signals
 # even if the engine produced nothing new this cycle).
 #
-# Crontab (every minute — flock prevents overlap):
-#   * * * * * BASH_ENV=/opt/market/fx_signal/.env /opt/market/fx_signal/run_pipeline.sh
+# Crontab (preferred):
+#   */5 * * * * BASH_ENV=/opt/market/.env /opt/market/fx_signal/run_pipeline.sh
 #
 # Credentials loaded in order:
 #   1. Environment variables already set in cron/shell
-#   2. /opt/market/fx_signal/.env  (sourced if present)
+#   2. /opt/market/.env          (single source of truth)
+#   3. /opt/market/fx_signal/.env (migration fallback only)
 #
 # Required env vars:
 #   TELEGRAM_BOT_TOKEN   — Telegram bot token
@@ -28,6 +29,7 @@ set -uo pipefail
 #       subsequent stages. Each stage captures its own exit code below.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 LOCKFILE="/tmp/fx_signal_pipeline.lock"
 PIPELINE_LOG="/var/log/webscrap-fx-pipeline.log"
 PYTHON="/usr/bin/python3"
@@ -73,9 +75,12 @@ run_stage() {
 }
 
 # ------------------------------------------------------------------
-# Load .env if present
+# Load .env — root first (canonical), then module-local fallback
 # ------------------------------------------------------------------
-if [[ -f "$SCRIPT_DIR/.env" ]]; then
+if [[ -f "$REPO_ROOT/.env" ]]; then
+    # shellcheck source=/dev/null
+    source "$REPO_ROOT/.env"
+elif [[ -f "$SCRIPT_DIR/.env" ]]; then
     # shellcheck source=/dev/null
     source "$SCRIPT_DIR/.env"
 fi
