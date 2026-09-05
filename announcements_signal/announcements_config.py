@@ -14,20 +14,19 @@ patterns first.
 """
 
 # ------------------------------------------------------------------
-# Auto-load .env (next to this file) so every stage gets Telegram
-# credentials without needing BASH_ENV in cron. Values already in the
-# environment always win (setdefault never overrides).
+# Secrets: single source of truth is repo-root .env (/opt/market/.env).
+# Module-local .env still accepted as migration fallback.
 # ------------------------------------------------------------------
 import os as _os
+import sys as _sys
+from pathlib import Path as _Path
 
-_env_file = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), ".env")
-if _os.path.exists(_env_file):
-    with open(_env_file) as _f:
-        for _line in _f:
-            _line = _line.strip()
-            if _line and not _line.startswith("#") and "=" in _line:
-                _k, _, _v = _line.partition("=")
-                _os.environ.setdefault(_k.strip(), _v.strip().strip('\'"'))
+_REPO_ROOT = _Path(__file__).resolve().parent.parent
+if str(_REPO_ROOT) not in _sys.path:
+    _sys.path.insert(0, str(_REPO_ROOT))
+from env_loader import load_env  # noqa: E402
+
+load_env(local_dir=_Path(__file__).resolve().parent)
 
 
 # Each entry: (regex_pattern, category, subcategory, priority)
