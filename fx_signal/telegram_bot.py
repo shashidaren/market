@@ -45,6 +45,7 @@ from fx_config import (
     RISK_PER_TRADE_PCT,
     STALE_SUPPRESS_PIPS,
     STALE_WARN_PIPS,
+    get_stale_thresholds,
 )
 from util import migrate_timestamps, utc_now_str
 
@@ -350,10 +351,12 @@ def compute_live_metrics(
 
     live_rr = (live_reward / live_risk) if live_risk else 0.0
 
-    # Only adverse (positive) drift triggers suppression
+    # Only adverse (positive) drift triggers suppression.
+    # Thresholds are per-pair (BTC uses wider $ bands; FX keeps 15/30).
+    warn_pips, suppress_pips = get_stale_thresholds(pair)
     adverse_drift  = max(drift_pips, 0.0)
-    is_warn        = adverse_drift >= STALE_WARN_PIPS
-    is_suppress    = adverse_drift >= STALE_SUPPRESS_PIPS
+    is_warn        = adverse_drift >= warn_pips
+    is_suppress    = adverse_drift >= suppress_pips
     is_untradeable = live_rr < MIN_LIVE_RR
 
     return drift_pips, live_rr, is_warn, is_suppress, is_untradeable
@@ -504,10 +507,11 @@ def format_message(
                 f"Drift: <code>{abs(drift_pips):.1f} pips FAVOURABLE ✅</code>"
             )
 
+        _warn, _supp = get_stale_thresholds(pair)
         if is_suppress:
-            drift_lines.append(f"❌ Drift exceeds {STALE_SUPPRESS_PIPS} pip limit — setup broken")
+            drift_lines.append(f"❌ Drift exceeds {_supp:g} pip limit — setup broken")
         elif is_warn:
-            drift_lines.append(f"⚠️ Drift exceeds {STALE_WARN_PIPS} pip warning threshold")
+            drift_lines.append(f"⚠️ Drift exceeds {_warn:g} pip warning threshold")
         else:
             drift_lines.append("✅ Price close to reference")
 
