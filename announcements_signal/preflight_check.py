@@ -136,9 +136,19 @@ def check_ireport():
     try:
         import ireport_filter
         ok = ireport_filter._load_engine()
-        report(ok, "i_report filter engine",
-               "loaded" if ok else f"unavailable ({ireport_filter._load_error}) — "
-               "alerts will FAIL OPEN (sent unfiltered). pip install pandas-ta-classic")
+        err = str(getattr(ireport_filter, "_load_error", "") or "")
+        if ok:
+            detail = "loaded"
+        elif "No module named 'app" in err or "not a package" in err:
+            # Repo-root dashboard app.py shadowing i_report/app — the
+            # pandas-ta hint would be misleading here.
+            detail = (f"unavailable ({err}) — i_report/app is not importable as a "
+                      "package: i_report/app/__init__.py must exist. "
+                      "Alerts will FAIL OPEN (sent unfiltered).")
+        else:
+            detail = (f"unavailable ({err}) — alerts will FAIL OPEN (sent unfiltered). "
+                      "pip install pandas-ta-classic")
+        report(ok, "i_report filter engine", detail)
         pf = ireport_filter.load_portfolio()
         print(f"{OK} portfolio.txt — {len(pf)} holding(s): {sorted(pf) if pf else '(none — see portfolio.txt.example)'}")
     except Exception as e:
