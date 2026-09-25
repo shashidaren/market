@@ -8,7 +8,10 @@
 # Usage:
 #   ./check_all.sh               # read-only checks
 #   ./check_all.sh --send-test   # also sends ONE test message per Telegram
-#                                # module (fx, indices, gold, announcements)
+#                                # module (fx, indices, announcements)
+#
+# gold-watcher was RETIRED on 2026-09-25 (unused): no preflight, and the
+# service is expected to be disabled — see gold-watcher/README.md.
 # =============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -43,7 +46,6 @@ run_preflight() {
 # ── 1. Module preflights ────────────────────────────────────
 run_preflight "fx_signal"            "fx_signal"            "$SEND_TEST"
 run_preflight "indices_signal"       "indices_signal"       "$SEND_TEST"
-run_preflight "gold-watcher"         "gold-watcher"         "$SEND_TEST"
 run_preflight "announcements_signal" "announcements_signal" "$SEND_TEST"
 
 # ── 2. Root collector / scorer (news pipeline) ──────────────
@@ -78,7 +80,7 @@ esac
 # ── 3. systemd services ─────────────────────────────────────
 banner "systemd services"
 if command -v systemctl >/dev/null 2>&1; then
-    for svc in gold-watcher market-dashboard; do
+    for svc in market-dashboard; do
         state=$(systemctl is-active "$svc" 2>/dev/null)
         if [[ "$state" == "active" ]]; then
             echo "[ OK ] $svc — active"
@@ -140,7 +142,7 @@ if command -v curl >/dev/null 2>&1; then
         echo "[ OK ] movers tab — http://localhost:5000/movers"
         PASS+=("movers tab")
     else
-        echo "[WARN] movers tab not served (HTTP ${code:-none}) — sudo systemctl restart market-dashboard"
+        echo "[WARN] movers tab not served (HTTP ${code:-none}) — systemctl restart market-dashboard"
         WARN+=("movers tab")
     fi
 fi
@@ -149,7 +151,7 @@ if /usr/bin/python3 -c "import yfinance" 2>/dev/null; then
     echo "[ OK ] yfinance importable by /usr/bin/python3 (movers prices)"
     PASS+=("movers yfinance")
 else
-    echo "[WARN] yfinance missing for /usr/bin/python3 — movers tab can't fetch prices (sudo /usr/bin/python3 -m pip install yfinance)"
+    echo "[WARN] yfinance missing for /usr/bin/python3 — movers tab can't fetch prices (/usr/bin/python3 -m pip install yfinance)"
     WARN+=("movers yfinance")
 fi
 

@@ -27,6 +27,37 @@ log = logging.getLogger("price_context")
 # Cache to avoid hammering Yahoo on repeated lookups within same run
 _price_cache: dict[str, dict] = {}
 
+# ── Shared Yahoo circuit breaker (root yahoo_client.py) ────────────
+# All Yahoo jobs on this box share one IP, so they also share one
+# "Yahoo is rate-limiting us" state. Loaded by file path so this module
+# never needs the repo root on sys.path (its collector.py must not be
+# shadowed — see HANDOFF.md).
+_circuit = None
+_circuit_loaded = False
+
+
+def _shared_circuit():
+    global _circuit, _circuit_loaded
+    if not _circuit_loaded:
+        _circuit_loaded = True
+        try:
+            import importlib.util
+            path = Path(__file__).resolve().parent.parent / "yahoo_client.py"
+            spec = importlib.util.spec_from_file_location("_price_context_yahoo_client", path)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            _circuit = module.SHARED
+        except Exception as exc:  # noqa: BLE001 — breaker is optional
+            log.info("shared Yahoo circuit unavailable: %s", exc)
+            _circuit = None
+    return _circuit
+
+
+def _looks_like_rate_limit(exc: Exception) -> bool:
+    import re
+    text = str(exc).lower()
+    return "rate limit" in text or "too many requests" in text or bool(re.search(r"\b429\b", text))
+
 
 def _bursa_to_yahoo(stock_code: str) -> str:
     """
@@ -87,6 +118,14 @@ def get_price_context(
         log.warning("Invalid trade_date: %s", trade_date)
         return None
 
+    # Shared circuit: while ANY job on this IP is rate-limited, don't add
+    # our own requests — the alert simply goes out without a price block.
+    circuit = _shared_circuit()
+    if circuit is not None and circuit.is_open():
+        log.info("Yahoo circuit open (%s) — no price context for %s",
+                 circuit.state().get("reason"), ticker)
+        return None
+
     # Fetch a window: buffer days before trade_date → today
     start = trade_dt - timedelta(days=lookback_buffer)
     end   = datetime.now() + timedelta(days=1)
@@ -97,13 +136,24 @@ def get_price_context(
             start=start.strftime("%Y-%m-%d"),
             end=end.strftime("%Y-%m-%d"),
         )
-    except Exception:
+    except Exception as exc:
         log.exception("yfinance failed for %s", ticker)
+        try:
+            if circuit is not None and _looks_like_rate_limit(exc):
+                circuit.record_rate_limit(ticker)
+        except Exception:
+            pass
         return None
 
     if hist.empty or len(hist) < 2:
         log.warning("No price data for %s around %s", ticker, trade_date)
         return None
+
+    try:
+        if circuit is not None:
+            circuit.record_success()
+    except Exception:
+        pass
 
     # Find price on trade_date, or nearest trading day AT OR AFTER
     trade_target = trade_dt.strftime("%Y-%m-%d")

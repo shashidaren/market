@@ -47,6 +47,14 @@ from fx_config import (
 )
 from util import UTC_FMT, migrate_timestamps, utc_now_str
 
+# Shared Yahoo circuit breaker (repo root; fx_config puts the root on
+# sys.path). While ANY job on this IP is rate-limited, we stop asking —
+# and our own 429s / empty streaks pause the others.
+try:
+    import yahoo_client as yc
+except Exception:  # pragma: no cover — the breaker is optional
+    yc = None
+
 DB_PATH = Path(__file__).parent / "prices.db"
 
 logging.basicConfig(
@@ -233,6 +241,13 @@ def fetch_ohlcv(
     """
     last_exc = None
     for attempt in range(1, YF_MAX_ATTEMPTS + 1):
+        if yc is not None and yc.is_open():
+            st = yc.state()
+            log.warning(
+                "%s: Yahoo circuit OPEN until %s (%s) — skipping fetch, keeping old bars",
+                yf_symbol, st.get("until_iso"), st.get("reason"),
+            )
+            return None
         try:
             if SESSION is not None:
                 df = yf.Ticker(yf_symbol, session=SESSION).history(
@@ -243,6 +258,11 @@ def fetch_ohlcv(
         except Exception as exc:
             last_exc = exc
             if YFRateLimitError is not None and isinstance(exc, YFRateLimitError):
+                if yc is not None:
+                    try:
+                        yc.record_rate_limit(yf_symbol)
+                    except Exception:
+                        pass
                 log.warning(
                     "%s: Yahoo rate-limited — backing off %.0fs",
                     yf_symbol, RATE_LIMIT_WAIT_SECS,
@@ -265,11 +285,23 @@ def fetch_ohlcv(
                 time.sleep(RETRY_BACKOFF_BASE ** attempt)
                 continue
             log.warning("%s: empty DataFrame returned by yfinance", yf_symbol)
+            # FX pairs are never legitimately empty — this smells like a
+            # Yahoo silent ban. Count it towards the shared breaker.
+            if yc is not None:
+                try:
+                    yc.record_empty(yf_symbol)
+                except Exception:
+                    pass
             return None
 
         # yfinance sometimes returns MultiIndex columns for FX tickers
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
+        if yc is not None:
+            try:
+                yc.record_success()
+            except Exception:
+                pass
         return df
 
     log.error(
@@ -293,6 +325,13 @@ def fetch_ohlcv_batch(
     IDENTICAL series for every FX symbol. We compare Close series across
     symbols and treat identical output as a failed batch (never trust it).
     """
+    if yc is not None and yc.is_open():
+        st = yc.state()
+        log.warning(
+            "batch (%s): Yahoo circuit OPEN until %s (%s) — skipping batch fetch",
+            interval, st.get("until_iso"), st.get("reason"),
+        )
+        return None
     try:
         df = yf.download(
             list(yf_symbols), interval=interval, period=period,
