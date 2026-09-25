@@ -130,6 +130,14 @@ class HelperTests(unittest.TestCase):
             "Disposal of shares by Employees Provident Fund Board": "other",
             "": "unknown",
             None: "unknown",
+            # take-over / offer flows — excluded from the ranking sums
+            "Acquisition of shares pursuant to the take-over offer by ABC Holdings": "offer",
+            "Acceptance of the conditional offer by XYZ Sdn Bhd": "offer",
+            "Disposal of shares pursuant to the offer documents": "offer",
+            "Acquisition via tender offer": "offer",
+            # ...but genuine corporate-action offers stay corp-action
+            "Offer for sale of new shares": "corp-action",
+            "Subscription of shares offered under the rights issue": "corp-action",
         }
         for text, expected in cases.items():
             self.assertEqual(im.classify_method(text), expected, text)
@@ -179,6 +187,47 @@ class LeaderTests(unittest.TestCase):
         self.assertEqual(big["price"], 0.87)
         self.assertEqual(big["method"], "open-mkt")
         self.assertEqual(big["lag_days"], 2)
+
+    def test_deemed_interest_refilings_count_once(self):
+        db = self.db
+        # The same open-market trade re-filed by the holding company, the
+        # spouse and the director himself (deemed interest) — 3 filings,
+        # 1 transaction.
+        db.add("7001", person="XYZ HOLDINGS SDN BHD", shares=1_000_000)
+        db.add("7001", person="LIM WIFE", shares=1_000_000,
+               subcat="SUBSTANTIAL_S138", consideration=None, pps=None)
+        db.add("7001", person="LIM BOSS", shares=1_000_000)
+        # A genuinely separate trade (different day)
+        db.add("7001", person="LIM BOSS", shares=250_000, pub=3)
+        s = im.load_leaders(db.conn, days=7)["stocks"][0]
+        self.assertEqual(s["bought"], 1_250_000)              # unique txns, not 3,250,000
+        self.assertEqual(s["net_shares"], 1_250_000)
+        self.assertEqual(s["bought_all_persons"], 3_250_000)  # raw per-person sums kept
+        self.assertEqual(s["insiders"], 3)                    # still 3 distinct holders
+        self.assertEqual(s["n_filings"], 4)
+        self.assertFalse(s["offer_flag"])
+
+    def test_offer_trades_excluded_and_flagged(self):
+        db = self.db
+        # Take-over acceptance dwarfs the real open-market buying
+        db.add("7002", shares=3_000_000,
+               circumstances="Acceptance of the take-over offer by MEGA CORP")
+        db.add("7002", shares=200_000, pub=2,
+               circumstances="Acquisition via open market")
+        s = im.load_leaders(db.conn, days=7)["stocks"][0]
+        self.assertEqual(s["bought"], 200_000)                # offer shares excluded
+        self.assertEqual(s["offer_shares"], 3_000_000)
+        self.assertEqual(s["offer_trades"], 1)
+        self.assertTrue(s["offer_flag"])
+        # All-offer activity nets to zero flow
+        db.add("7003", shares=5_000_000,
+               circumstances="Disposal pursuant to the take-over offer by MEGA CORP")
+        s3 = next(x for x in im.load_leaders(db.conn, days=7)["stocks"]
+                  if x["stock_code"] == "7003")
+        self.assertEqual(s3["bought"], 0)
+        self.assertEqual(s3["sold"], 0)
+        self.assertEqual(s3["net_shares"], 0)
+        self.assertTrue(s3["offer_flag"])
 
     def test_ranking_modes_limit_and_filters(self):
         db = self.db
@@ -299,6 +348,21 @@ class MetricTests(unittest.TestCase):
         self.assertIsNone(m["chg_1m_pct"])
         self.assertIsNone(m["vol_ratio_5d"])
 
+    def test_penny_tick_warning(self):
+        # A RM0.02 stock: one 0.005 tick = 25% of the price (5037 case).
+        bars = make_bars(n=30, start=0.019, drift=0.05, vol=50_000)
+        bars[-1]["c"] = 0.02
+        m = im.compute_metrics(bars, self.summary())
+        self.assertEqual(m["tick_size"], 0.005)
+        self.assertEqual(m["one_tick_pct"], 25.0)
+        self.assertTrue(m["is_penny"])
+        # A RM2 stock: tick is 1 sen, no warning.
+        bars = make_bars(n=30, start=2.00, drift=0.0, vol=50_000)
+        m = im.compute_metrics(bars, self.summary())
+        self.assertEqual(m["tick_size"], 0.01)
+        self.assertEqual(m["one_tick_pct"], 0.5)
+        self.assertFalse(m["is_penny"])
+
 
 # ─── Price cache ───────────────────────────────────────────────────
 
@@ -314,7 +378,8 @@ class PriceCacheTests(unittest.TestCase):
                 raise self.fail[symbol]
             return make_bars(n=30)
 
-        self.cache = im.PriceCache(fetcher=fetcher, clock=self.clock, max_workers=2)
+        self.cache = im.PriceCache(fetcher=fetcher, clock=self.clock, max_workers=2,
+                                   circuit=None)  # hermetic: no shared circuit file
 
     def test_ttl_hit_and_expiry(self):
         v = self.cache.get_many(["1001", "1002"])
@@ -391,11 +456,65 @@ class PriceCacheTests(unittest.TestCase):
         self.assertEqual(ctx.exception.kind, "setup")
         self.assertIn("pip install yfinance", str(ctx.exception))
 
-        cache = im.PriceCache(fetcher=im.fetch_daily_bars, clock=self.clock)
+        cache = im.PriceCache(fetcher=im.fetch_daily_bars, clock=self.clock, circuit=None)
         with mock.patch.dict(sys.modules, {"yfinance": None}):
             v = cache.get_many(["5352", "1155", "5347"])
         self.assertEqual({x["error_kind"] for x in v.values()}, {"setup"})
         self.assertFalse(cache.in_cooldown())    # not mistaken for a Yahoo ban
+
+    def test_fetch_daily_bars_prefers_hide_exceptions_config(self):
+        # Newer yfinance deprecates history(raise_errors=...) in favour of
+        # yf.config.debug.hide_exceptions — must use the knob when present
+        # (HANDOFF §3.1 DeprecationWarning) and keep the raise_errors=True
+        # path for older versions.
+        import sys
+        import types
+        from datetime import datetime as dt
+        from unittest import mock
+
+        class Row(dict):
+            pass
+
+        class FakeDF:
+            empty = False
+
+            def __init__(self):
+                self._rows = [(dt(2026, 9, 23),
+                               Row(Open=1.0, High=1.1, Low=0.9, Close=1.05, Volume=1000))]
+
+            def iterrows(self):
+                yield from self._rows
+
+        def fake_yf(hide_exceptions):
+            mod = types.ModuleType("yfinance")
+            captured = {}
+            if hide_exceptions is not None:
+                mod.config = types.SimpleNamespace(
+                    debug=types.SimpleNamespace(hide_exceptions=hide_exceptions))
+
+            class Ticker:
+                def __init__(self, symbol):
+                    self.symbol = symbol
+
+                def history(self, **kw):
+                    captured.update(kw)
+                    return FakeDF()
+
+            mod.Ticker = Ticker
+            mod._captured = captured
+            return mod
+
+        new_yf = fake_yf(True)     # knob present → set False, no raise_errors kwarg
+        with mock.patch.dict(sys.modules, {"yfinance": new_yf}):
+            bars = im.fetch_daily_bars("5352.KL")
+        self.assertEqual(bars[-1]["c"], 1.05)
+        self.assertNotIn("raise_errors", new_yf._captured)
+        self.assertEqual(new_yf.config.debug.hide_exceptions, False)
+
+        old_yf = fake_yf(None)     # older yfinance → keep raise_errors=True
+        with mock.patch.dict(sys.modules, {"yfinance": old_yf}):
+            im.fetch_daily_bars("5352.KL")
+        self.assertTrue(old_yf._captured.get("raise_errors"))
 
     def test_prune_forgets_symbols_nobody_asks_for(self):
         self.cache.get_many(["1001", "1002"])
@@ -413,6 +532,82 @@ class PriceCacheTests(unittest.TestCase):
         self.assertEqual(im._classify_exception(OSError("SSL connect failed")), "network")
 
 
+# ─── Shared Yahoo circuit (cross-process) ──────────────────────────
+
+class SharedCircuitTests(unittest.TestCase):
+    def setUp(self):
+        import yahoo_client as yc
+        self.yc = yc
+        fd, self.path = tempfile.mkstemp(suffix=".json")
+        os.close(fd)
+        os.unlink(self.path)                      # Circuit creates it lazily
+        self.clock = FakeClock(MARKET_EPOCH)
+        self.circuit = yc.Circuit(path=self.path, clock=self.clock)
+
+    def tearDown(self):
+        for suffix in ("", ".lock"):
+            try:
+                os.unlink(self.path + suffix)
+            except FileNotFoundError:
+                pass
+
+    def test_open_by_default_and_blocks_new_caches(self):
+        self.assertFalse(self.circuit.is_open())
+        self.circuit.record_rate_limit("1001.KL")
+        self.assertTrue(self.circuit.is_open())
+
+        calls = []
+        cache = im.PriceCache(fetcher=lambda s: calls.append(s) or make_bars(n=5),
+                              clock=self.clock, circuit=self.circuit)
+        v = cache.get_many(["2002"])["2002"]      # other job tripped → no fetch
+        self.assertEqual(v["status"], "cooldown")
+        self.assertIn("shared circuit breaker", v["error"])
+        self.assertEqual(calls, [])
+
+    def test_movers_rate_limit_trips_the_shared_file(self):
+        class YFRateLimitError(Exception):
+            pass
+
+        self.fail_sym = "1001.KL"
+        cache = im.PriceCache(fetcher=self._fail_with(YFRateLimitError("Too Many Requests")),
+                              clock=self.clock, circuit=self.circuit)
+        cache.get_many(["1001"])
+        st = self.circuit.state()
+        self.assertTrue(st["is_open"])
+        self.assertEqual(st["reason"], "Yahoo rate-limit reply")
+        self.assertEqual(st["by"], "1001.KL")
+
+    def test_success_clears_and_records(self):
+        self.circuit.record_empty("EURUSD=X")     # streak 1 (fx-style)
+        calls = []
+        cache = im.PriceCache(fetcher=lambda s: calls.append(s) or make_bars(n=5),
+                              clock=self.clock, circuit=self.circuit)
+        cache.get_many(["1001"])
+        self.assertEqual(self.circuit.empty_streak(), 0)   # success reset the streak
+        self.assertFalse(self.circuit.is_open())
+
+    def test_no_data_does_not_trip_the_shared_breaker(self):
+        cache = im.PriceCache(
+            fetcher=lambda s: (_ for _ in ()).throw(im.PriceFetchError("no_data", "no data")),
+            clock=self.clock, circuit=self.circuit)
+        # 3 empty KL symbols: local silent-ban logic fires, shared must not
+        cache.get_many(["3001", "3002", "3003"])
+        self.assertTrue(cache.in_cooldown())       # local behaviour unchanged
+        self.assertFalse(self.circuit.is_open())   # fx pipeline untouched
+
+    def test_cooldown_expiry_reopens(self):
+        self.circuit.record_rate_limit("1001.KL")
+        self.clock.t += 901
+        self.assertFalse(self.circuit.is_open())
+        st = self.circuit.state()
+        self.assertEqual(st["remaining_secs"], 0)
+
+    def _fail_with(self, exc):
+        def fetcher(symbol):
+            raise exc
+        return fetcher
+
+
 # ─── Flask routes ──────────────────────────────────────────────────
 
 class RouteTests(unittest.TestCase):
@@ -425,7 +620,8 @@ class RouteTests(unittest.TestCase):
             self.db.add(code, score=15 - i, shares=100_000 * (i + 1))
         self._orig_db, self._orig_cache = app_module.DB_PATH, im.PRICE_CACHE
         app_module.DB_PATH = self.db.path
-        im.PRICE_CACHE = im.PriceCache(fetcher=lambda s: make_bars(n=60), clock=FakeClock(MARKET_EPOCH))
+        im.PRICE_CACHE = im.PriceCache(fetcher=lambda s: make_bars(n=60), clock=FakeClock(MARKET_EPOCH),
+                                       circuit=None)  # hermetic
         self.client = app_module.app.test_client()
 
     def tearDown(self):

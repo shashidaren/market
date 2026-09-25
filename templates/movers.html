@@ -194,6 +194,7 @@
   .dir-buy  { background: #173a26; color: var(--buy); }
   .dir-sell { background: #4a1f24; color: var(--sell); }
   .dir-flat { background: var(--bg); color: var(--text-secondary); border: 1px solid var(--border); }
+  .dir-offer { background: #4a3a1f; color: var(--mega); }
   .mc-price { text-align: right; font-family: 'JetBrains Mono', monospace; white-space: nowrap; }
   .mc-last { font-size: 18px; font-weight: 600; }
   .mc-last small { font-size: 11px; color: var(--text-muted); font-weight: 400; margin-right: 3px; }
@@ -221,6 +222,16 @@
     color: var(--mega); background: rgba(11, 14, 20, 0.85);
     border: 1px solid #4a3a1f; border-radius: 4px; padding: 2px 7px;
     pointer-events: none;
+  }
+  .warn-strip {
+    margin: 10px 16px 0;
+    padding: 7px 10px;
+    font-size: 11.5px;
+    line-height: 1.5;
+    color: var(--mega);
+    background: rgba(255, 193, 7, 0.06);
+    border: 1px solid #4a3a1f;
+    border-radius: 6px;
   }
   .tip {
     position: absolute;
@@ -705,6 +716,15 @@ function statsHtml(s) {
   </div>`;
 }
 
+function tickWarnHtml(s) {
+  const m = s.metrics;
+  if (!m || m.one_tick_pct === null || m.one_tick_pct === undefined) return '';
+  if (!m.is_penny && m.one_tick_pct < 2) return '';
+  const label = m.is_penny ? 'penny stock (< RM0.10)' : 'sub-RM1 stock';
+  return `<div class="warn-strip">⚠ ${esc(label)} — one ${fmtPrice(m.tick_size)} tick ≈ ` +
+    `${m.one_tick_pct.toFixed(1)}% of the last price, so a one-tick move looks like a big % change</div>`;
+}
+
 function tradesHtml(s) {
   const rows = (s.trades || []).map(t => `
     <tr>
@@ -759,6 +779,7 @@ function cardHtml(s, i) {
       <span class="mc-code">${esc(s.stock_code)}</span>
       <span class="mc-company" title="${esc(s.company_name || '')}">${esc(s.company_name || '')}</span>
       <span class="dir dir-${s.direction}">${dirLabel}</span>
+      ${s.offer_flag ? `<span class="dir dir-offer" title="Take-over / offer filings in this window — those shares are excluded from the net figure below">OFFER</span>` : ''}
       <span class="mc-price">
         ${m.last ? `<span class="mc-last"><small>RM</small>${fmtPrice(m.last)}</span><span class="mc-day ${pctClass(m.day_chg_pct)}">${fmtPct(m.day_chg_pct, 2)}</span>`
           : '<span class="mc-last muted" style="font-size:13px">no price</span>'}
@@ -767,10 +788,11 @@ function cardHtml(s, i) {
     </div>
     ${chartBlock(s)}
     ${statsHtml(s)}
+    ${tickWarnHtml(s)}
     <div class="mc-foot">
       <span>${s.n_filings} filings · ${s.active_days} filing days · ${s.insiders} insider${s.insiders === 1 ? '' : 's'} ·
         bought ${fmtShares(s.bought)} · sold ${fmtShares(s.sold)} ·
-        net <b class="${s.net_shares > 0 ? 'up' : s.net_shares < 0 ? 'down' : ''}">${fmtSigned(s.net_shares)}</b>${adv}${lag}</span>
+        net <b class="${s.net_shares > 0 ? 'up' : s.net_shares < 0 ? 'down' : ''}">${fmtSigned(s.net_shares)}</b>${adv}${s.offer_flag ? ` <span class="muted" title="Take-over / offer filings — counted separately, not in the net figure">+${fmtShares(s.offer_shares)} offer shares excl.</span>` : ''}${lag}</span>
       <span class="mc-actions">
         <button class="btn" data-toggle="${esc(s.stock_code)}">${open ? '▾' : '▸'} trades (${(s.trades || []).length})</button>
         <a class="btn" href="${bursaUrl}" target="_blank" rel="noopener">bursa ↗</a>

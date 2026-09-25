@@ -23,7 +23,10 @@ At most one request per stock per cache TTL — 10 min during Bursa hours,
 60 min outside — no matter how many browsers have the tab open. Failed
 lookups are negatively cached. A rate-limit reply (or 3 empty replies in
 a row, Yahoo's "silent ban") opens a cooldown (YAHOO_COOLDOWN_SECS,
-default 900 s) during which only cached data is served.
+default 900 s) during which only cached data is served. The cooldown is
+also recorded in the SHARED circuit breaker (yahoo_client.py), so the fx
+and indices jobs on the same IP pause too — and a trip by one of them
+pauses this tab.
 
 Quick check on the server (does Yahoo answer for today's top 5?):
 
@@ -59,6 +62,14 @@ try:  # pragma: no cover - env_loader always exists in this repo
     load_env()
 except Exception:  # pragma: no cover
     pass
+
+# Cross-process Yahoo circuit breaker (shared with the fx / indices /
+# price-context jobs on the same IP). Optional: everything still works
+# with only the in-process cooldown if the import fails.
+try:
+    import yahoo_client
+except Exception:  # pragma: no cover
+    yahoo_client = None
 
 
 def _env_int(name: str, default: int) -> int:
@@ -135,6 +146,14 @@ def bursa_session_open(now: datetime | None = None) -> bool:
 # ─── Trade method (best-effort, from the filing's circumstances) ───
 
 _METHOD_RULES = (
+    # offer FIRST: a take-over acceptance is a corporate event even when the
+    # text also mentions the market — these flows must be excluded from the
+    # ranking sums (see summarize_stock).
+    ("offer", re.compile(
+        r"take[\s-]*over|tender\s+(?:offer|documents?)|\boffers?\s+(?:by|from)\b|"
+        r"\boffers?\s+to\s+(?:acquire|purchase|merge)\b|"
+        r"accept\w*\s+of\s+(?:the\s+|an?\s+|conditional\s+|partial\s+|voluntary\s+)*offer|"
+        r"\boffer\s+documents?\b|pursuant\s+to\s+the\s+offer", re.I)),
     # order matters: "off market" must win over "market"
     ("off-mkt", re.compile(r"off[\s-]*market|direct business|married deal", re.I)),
     ("open-mkt", re.compile(r"open[\s-]*market|\bon[\s-]*market|through bursa|via bursa", re.I)),
@@ -287,11 +306,43 @@ def dedupe_trades(rows: list[dict]) -> list[dict]:
 
 
 def summarize_stock(stock_code: str, rows: list[dict]) -> dict:
-    """Aggregate one stock's filings in the window into an activity summary."""
+    """
+    Aggregate one stock's filings in the window into an activity summary.
+
+    The flow numbers (bought / sold / net / gross) count UNIQUE
+    transactions — key (trade_date, side, shares) — not per-person sums:
+    deemed-interest and group re-filings (holding company, spouse, private
+    vehicle…) repeat the SAME trade under many names, which used to
+    inflate the numbers massively (MKH showed +317M for one transaction).
+    The per-person echoes stay in `trades`, so the table still shows every
+    filing. Cost of the rule: two genuinely-separate same-size trades on
+    the same day count once — far rarer than re-filings.
+
+    Trades tagged method == "offer" (take-over / tender acceptance) are
+    excluded from the flow numbers and reported separately (offer_shares,
+    offer_trades, offer_flag): they are corporate events, not signals.
+    """
     trades = dedupe_trades(rows)
-    bought = sum(t["shares"] for t in trades if t["side"] == "buy")
-    sold = sum(t["shares"] for t in trades if t["side"] == "sell")
+
+    unique: dict[tuple, dict] = {}
+    for t in trades:
+        unique.setdefault((t["trade_date"], t["side"], t["shares"]), t)
+
+    market = [t for t in unique.values() if t["method"] != "offer"]
+    offer_txns = [t for t in unique.values() if t["method"] == "offer"]
+    offer_shares = sum(t["shares"] for t in offer_txns)
+    bought = sum(t["shares"] for t in market if t["side"] == "buy")
+    sold = sum(t["shares"] for t in market if t["side"] == "sell")
+    gross = bought + sold
     net = bought - sold
+
+    # Flag the card when take-over flows dominate the window's activity
+    # (≥ ~20% of all transacted shares).
+    offer_flag = bool(offer_txns) and offer_shares * 5 >= offer_shares + gross
+
+    raw_bought = sum(t["shares"] for t in trades if t["side"] == "buy")
+    raw_sold = sum(t["shares"] for t in trades if t["side"] == "sell")
+
     trade_dates = sorted(t["trade_date"] for t in trades if t["trade_date"])
     published = sorted(r["published_date"] for r in rows if r.get("published_date"))
     lags = [t["lag_days"] for t in trades if t["lag_days"] is not None and t["lag_days"] >= 0]
@@ -308,7 +359,12 @@ def summarize_stock(stock_code: str, rows: list[dict]) -> dict:
         "bought": bought,
         "sold": sold,
         "net_shares": net,
-        "gross_shares": bought + sold,
+        "gross_shares": gross,
+        "bought_all_persons": raw_bought,
+        "sold_all_persons": raw_sold,
+        "offer_trades": len(offer_txns),
+        "offer_shares": offer_shares,
+        "offer_flag": offer_flag,
         "direction": "buy" if net > 0 else "sell" if net < 0 else "flat",
         "first_trade_date": trade_dates[0] if trade_dates else None,
         "last_trade_date": trade_dates[-1] if trade_dates else None,
@@ -403,12 +459,22 @@ def fetch_daily_bars(symbol: str, period: str = HISTORY_PERIOD) -> list[dict]:
     except ImportError as exc:
         raise PriceFetchError(
             "setup", "yfinance is not installed for the dashboard's Python — "
-                     "sudo /usr/bin/python3 -m pip install yfinance") from exc
+                     "/usr/bin/python3 -m pip install yfinance") from exc
 
     ticker = yf.Ticker(symbol)
     try:
-        df = ticker.history(period=period, interval="1d", auto_adjust=False,
-                            timeout=10, raise_errors=True)
+        # yfinance deprecates history(raise_errors=...) in favour of
+        # yf.config.debug.hide_exceptions. Setting it to False keeps errors
+        # raising (same behaviour as raise_errors=True) without the
+        # DeprecationWarning spamming the service log.
+        debug = getattr(getattr(yf, "config", None), "debug", None)
+        if getattr(debug, "hide_exceptions", None) is not None:
+            debug.hide_exceptions = False
+            df = ticker.history(period=period, interval="1d",
+                                auto_adjust=False, timeout=10)
+        else:
+            df = ticker.history(period=period, interval="1d", auto_adjust=False,
+                                timeout=10, raise_errors=True)
     except TypeError:  # very old yfinance without timeout/raise_errors
         df = ticker.history(period=period, interval="1d", auto_adjust=False)
 
@@ -450,11 +516,21 @@ class PriceCache:
                          in the cache for the next refresh)
     - failed refresh   → previous bars are kept and served as 'stale'
     - rate limit       → cooldown: no requests at all until it expires
+
+    On top of the in-process cooldown there is the SHARED cross-process
+    circuit breaker (yahoo_client.Circuit, default SHARED): while the fx
+    or indices jobs have tripped Yahoo on this IP, this cache stops
+    requesting too — and its own rate-limit trips pause the other jobs.
+    Pass circuit=None to disable (tests).
     """
 
-    def __init__(self, fetcher=None, clock=time.time, max_workers: int = 4):
+    def __init__(self, fetcher=None, clock=time.time, max_workers: int = 4,
+                 circuit: str = "shared"):
         self._fetcher = fetcher or fetch_daily_bars
         self._clock = clock
+        if circuit == "shared":
+            circuit = yahoo_client.SHARED if yahoo_client is not None else None
+        self._circuit = circuit
         self._lock = threading.Lock()
         self._entries: dict[str, dict] = {}
         self._inflight: dict[str, object] = {}
@@ -482,6 +558,12 @@ class PriceCache:
         now = self._clock() if now is None else now
         return now < self.cooldown_until
 
+    def _shared_open(self) -> bool:
+        try:
+            return self._circuit is not None and self._circuit.is_open()
+        except Exception:  # noqa: BLE001 — the breaker must never break us
+            return False
+
     # -- fetching ----------------------------------------------------
     def _fetch_one(self, symbol: str) -> None:
         started = self._clock()
@@ -504,6 +586,14 @@ class PriceCache:
                     self._empty_streak = 0
                     log.warning("Yahoo cooldown until %s (%s: %s)",
                                 _iso_utc(self.cooldown_until), symbol, msg)
+            # Tell the other jobs on this IP. no_data is deliberately NOT
+            # recorded: KL LEAP-market symbols are legitimately missing and
+            # a movers tab must not pause the fx pipeline (see yahoo_client).
+            if self._circuit is not None and kind == "rate_limit":
+                try:
+                    self._circuit.record_rate_limit(symbol)
+                except Exception:  # noqa: BLE001
+                    pass
             log.warning("price fetch failed for %s [%s]: %s", symbol, kind, msg)
         else:
             with self._lock:
@@ -511,6 +601,11 @@ class PriceCache:
                                          "attempted_at": started, "error": None,
                                          "error_kind": None}
                 self._empty_streak = 0
+            if self._circuit is not None:
+                try:
+                    self._circuit.record_success()
+                except Exception:  # noqa: BLE001
+                    pass
         finally:
             with self._lock:
                 self._inflight.pop(symbol, None)
@@ -522,7 +617,7 @@ class PriceCache:
         futures = []
         with self._lock:
             self._prune(now, keep=set(symbols.values()))
-            cooling = now < self.cooldown_until
+            cooling = now < self.cooldown_until or self._shared_open()
             for sym in dict.fromkeys(symbols.values()):
                 if self._is_fresh(self._entries.get(sym), now):
                     continue
@@ -562,13 +657,18 @@ class PriceCache:
             status = "stale"          # older data kept after a failed / skipped refresh
         elif pending:
             status = "pending"        # still downloading — next refresh will have it
-        elif self.in_cooldown(now) and not entry:
-            status = "cooldown"
+        elif (self.in_cooldown(now) or self._shared_open()) and not entry:
+            status = "cooldown"       # local pause, or a trip from another job
         else:
             status = "error"
 
         if status == "cooldown":
-            error = f"Yahoo cooldown until {_iso_utc(self.cooldown_until)} (rate-limit protection)"
+            if self.in_cooldown(now):
+                error = f"Yahoo cooldown until {_iso_utc(self.cooldown_until)} (rate-limit protection)"
+            else:
+                shared = self._circuit.state() if self._circuit is not None else {}
+                error = (f"Yahoo paused for all jobs until {shared.get('until_iso')} "
+                         f"({shared.get('reason') or 'rate-limit protection'} — shared circuit breaker)")
         elif status == "pending" and not error:
             error = "price download still in progress"
 
@@ -586,7 +686,7 @@ class PriceCache:
     def feed_status(self) -> dict:
         now = self._clock()
         with self._lock:
-            return {
+            status = {
                 "source": PRICE_SOURCE,
                 "market_open": bursa_session_open(datetime.fromtimestamp(now, timezone.utc)),
                 "ttl_secs": self.ok_ttl(now),
@@ -595,6 +695,18 @@ class PriceCache:
                 "cached_symbols": len(self._entries),
                 "requests_made": self.requests_made,
             }
+        if self._circuit is not None:
+            try:
+                shared = self._circuit.state()
+                status["shared_circuit"] = {
+                    "path": shared.get("path"),
+                    "open": shared.get("is_open"),
+                    "until": shared.get("until_iso"),
+                    "reason": shared.get("reason"),
+                }
+            except Exception:  # noqa: BLE001
+                pass
+        return status
 
 
 PRICE_CACHE = PriceCache()
@@ -670,6 +782,25 @@ def insider_avg_price(trades: list[dict], side: str, bars: list[dict] | None) ->
     return {"price": round(total_value / total_shares, 4), "shares": total_shares}
 
 
+def bursa_tick_size(price: float) -> float:
+    """
+    Bursa Malaysia minimum bid (tick) for securities — one tick on a low-
+    priced stock is a big % move (5037 at RM0.020: 0.015 → 0.020 = +33%).
+
+        below RM1.00  → RM0.005
+        RM1 – 9.99    → RM0.010
+        RM10 – 99.98  → RM0.020
+        RM100 & above → RM0.100
+    """
+    if price < 1.0:
+        return 0.005
+    if price < 10.0:
+        return 0.01
+    if price < 100.0:
+        return 0.02
+    return 0.10
+
+
 def compute_metrics(bars: list[dict], summary: dict) -> dict:
     """Price metrics for one stock, relative to its insider activity."""
     last = bars[-1]
@@ -697,6 +828,12 @@ def compute_metrics(bars: list[dict], summary: dict) -> dict:
     ref_avg = avg_sell if direction == "sell" else avg_buy
 
     net = summary.get("net_shares") or 0
+
+    # Penny / tick warning: on sub-RM1 stocks one minimum bid step is a
+    # large % move, so "up 33%" can literally be one tick.
+    tick = bursa_tick_size(last["c"])
+    one_tick_pct = round(tick / last["c"] * 100, 2)
+
     return {
         "last": last["c"],
         "as_of": last["t"],
@@ -724,6 +861,9 @@ def compute_metrics(bars: list[dict], summary: dict) -> dict:
         "avg_sell_price": avg_sell["price"] if avg_sell else None,
         "vs_insider_avg_pct": _pct(ref_avg["price"], last["c"]) if ref_avg else None,
         "vs_insider_avg_side": ("sell" if direction == "sell" else "buy") if ref_avg else None,
+        "tick_size": tick,
+        "one_tick_pct": one_tick_pct,
+        "is_penny": last["c"] < 0.10,
     }
 
 
