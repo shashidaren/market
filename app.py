@@ -14,7 +14,9 @@ extended with relevance/sentiment/sector columns and filters.
 import sqlite3
 from pathlib import Path
 
-from flask import Flask, jsonify, render_template
+from flask import Flask, jsonify, render_template, request
+
+import insider_movers
 
 DB_PATH = Path(__file__).parent / "news.db"
 
@@ -279,6 +281,36 @@ def api_insider_stats():
         "strong_signals": strong_signals,
         "last_updated": last_updated,
     })
+
+
+# ═══════════════════════════════════════════════════════════════
+# INSIDER MOVERS ROUTES — price action of the top insider stocks
+# ═══════════════════════════════════════════════════════════════
+
+@app.route("/movers")
+def movers_page():
+    return render_template("movers.html")
+
+
+@app.route("/api/movers")
+def api_movers():
+    """
+    Top N (default 5, max 10) stocks by insider activity, each with ~1y of
+    daily prices and price-vs-insider metrics.
+
+        /api/movers?rank=score|filings|shares&days=7&limit=5
+
+    Insider data comes from the same tables as /api/insider/*; prices come
+    from Yahoo through insider_movers.PRICE_CACHE (TTL-cached, so page
+    refreshes don't turn into Yahoo requests).
+    """
+    days, limit, rank = insider_movers.parse_params(request.args)
+    conn = get_conn()
+    try:
+        leaders = insider_movers.load_leaders(conn, days=days, limit=limit, rank=rank)
+    finally:
+        conn.close()  # don't hold the DB while waiting on Yahoo
+    return jsonify(insider_movers.build_payload(leaders, days, limit, rank))
 
 
 

@@ -134,6 +134,23 @@ if command -v curl >/dev/null 2>&1; then
         echo "[FAIL] dashboard not responding on :5000 (HTTP ${code:-none})"
         FAIL+=("dashboard")
     fi
+    # movers tab: page only (no Yahoo call). 404 = service still running old code.
+    code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 http://localhost:5000/movers 2>/dev/null)
+    if [[ "$code" == "200" ]]; then
+        echo "[ OK ] movers tab — http://localhost:5000/movers"
+        PASS+=("movers tab")
+    else
+        echo "[WARN] movers tab not served (HTTP ${code:-none}) — sudo systemctl restart market-dashboard"
+        WARN+=("movers tab")
+    fi
+fi
+# the movers tab fetches prices with yfinance under the service's interpreter
+if /usr/bin/python3 -c "import yfinance" 2>/dev/null; then
+    echo "[ OK ] yfinance importable by /usr/bin/python3 (movers prices)"
+    PASS+=("movers yfinance")
+else
+    echo "[WARN] yfinance missing for /usr/bin/python3 — movers tab can't fetch prices (sudo /usr/bin/python3 -m pip install yfinance)"
+    WARN+=("movers yfinance")
 fi
 
 # ── Summary ─────────────────────────────────────────────────
