@@ -15,6 +15,14 @@ from indices_config import (
     DAILY_LOOKBACK_DAYS,
 )
 
+# Shared Yahoo circuit breaker (repo root; indices_config puts the root on
+# sys.path). While ANY job on this IP is rate-limited, we stop asking —
+# and our own 429s / empty streaks pause the others.
+try:
+    import yahoo_client as yc
+except Exception:  # pragma: no cover — the breaker is optional
+    yc = None
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
