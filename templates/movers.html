@@ -1,0 +1,1044 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>market // insider movers</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap');
+
+  :root {
+    --bg: #0b0e14;
+    --surface: #131722;
+    --surface-hover: #171c29;
+    --border: #232838;
+    --text-primary: #e6e9ef;
+    --text-secondary: #8b93a7;
+    --text-muted: #565f78;
+    --accent: #4fd1c5;
+    --accent-dim: #2a5f5a;
+    --buy: #4ade80;
+    --sell: #f87171;
+    --mega: #fbbf24;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text-primary);
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+  }
+
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 20px 32px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+  .title span { color: var(--accent); }
+
+  .nav { display: flex; gap: 4px; font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+  .nav a {
+    color: var(--text-secondary);
+    text-decoration: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    transition: all 0.12s;
+  }
+  .nav a:hover { color: var(--text-primary); background: var(--surface); }
+  .nav a.active { color: var(--accent); background: var(--accent-dim); }
+
+  .status {
+    display: flex; align-items: center; gap: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+  .pulse {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--accent);
+    animation: pulse 2s infinite;
+  }
+  .pulse.warn { background: var(--mega); animation: none; }
+  .pulse.off { background: var(--sell); animation: none; }
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(79, 209, 197, 0.5); }
+    70% { box-shadow: 0 0 0 8px rgba(79, 209, 197, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(79, 209, 197, 0); }
+  }
+  @media (prefers-reduced-motion: reduce) { .pulse { animation: none; } }
+
+  main { max-width: 1200px; margin: 0 auto; padding: 28px 32px 60px; }
+
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 16px;
+  }
+  .stat-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 6px;
+  }
+  .stat-value { font-family: 'JetBrains Mono', monospace; font-size: 20px; font-weight: 600; }
+  .stat-value.small { font-size: 15px; padding-top: 3px; }
+
+  .filter-bar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  select {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    padding: 6px 10px;
+    border-radius: 5px;
+  }
+  .range-toggle { display: inline-flex; border: 1px solid var(--border); border-radius: 5px; overflow: hidden; }
+  .range-toggle button {
+    background: var(--surface);
+    color: var(--text-secondary);
+    border: none;
+    border-right: 1px solid var(--border);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    padding: 7px 11px;
+    cursor: pointer;
+  }
+  .range-toggle button:last-child { border-right: none; }
+  .range-toggle button:hover { color: var(--text-primary); }
+  .range-toggle button[aria-pressed="true"] { background: var(--accent-dim); color: var(--accent); }
+
+  .legend {
+    margin-left: auto;
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+  .legend > span { display: inline-flex; align-items: center; gap: 5px; }
+  .lg-ico { width: 11px; height: 11px; }
+  .lg-ico.lg-wide { width: 18px; }
+  .legend .lg-zone {
+    display: inline-block; width: 12px; height: 10px; vertical-align: -1px;
+    background: rgba(79, 209, 197, 0.14); border: 1px solid rgba(79, 209, 197, 0.35);
+  }
+
+  /* ── Mover card ───────────────────────────────────── */
+  .mover-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 16px;
+    overflow: hidden;
+  }
+  .mc-head {
+    display: grid;
+    grid-template-columns: 34px 52px 70px 1fr auto auto;
+    gap: 12px;
+    align-items: center;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+  }
+  .mc-rank { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--text-muted); }
+  .s-score {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    font-weight: 600;
+    text-align: center;
+    padding: 4px 8px;
+    border-radius: 4px;
+  }
+  .score-mega   { background: #4a3a1f; color: var(--mega); }
+  .score-strong { background: var(--accent-dim); color: var(--accent); }
+  .score-med    { background: var(--bg); color: var(--text-secondary); border: 1px solid var(--border); }
+  .mc-code { font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 600; color: var(--accent); }
+  .mc-company { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dir {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    padding: 3px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+  }
+  .dir-buy  { background: #173a26; color: var(--buy); }
+  .dir-sell { background: #4a1f24; color: var(--sell); }
+  .dir-flat { background: var(--bg); color: var(--text-secondary); border: 1px solid var(--border); }
+  .mc-price { text-align: right; font-family: 'JetBrains Mono', monospace; white-space: nowrap; }
+  .mc-last { font-size: 18px; font-weight: 600; }
+  .mc-last small { font-size: 11px; color: var(--text-muted); font-weight: 400; margin-right: 3px; }
+  .mc-day { font-size: 12px; margin-left: 8px; }
+  .mc-asof { display: block; font-size: 10.5px; color: var(--text-muted); margin-top: 2px; }
+
+  .up { color: var(--buy); }
+  .down { color: var(--sell); }
+  .flat { color: var(--text-secondary); }
+  .muted { color: var(--text-muted); }
+
+  .mc-chart { position: relative; padding: 6px 0 0; }
+  .mc-chart svg { display: block; touch-action: pan-y; }
+  .mc-chart-empty {
+    padding: 44px 20px;
+    text-align: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    line-height: 1.7;
+  }
+  .stale-flag {
+    position: absolute; top: 10px; left: 14px;
+    font-family: 'JetBrains Mono', monospace; font-size: 10.5px;
+    color: var(--mega); background: rgba(11, 14, 20, 0.85);
+    border: 1px solid #4a3a1f; border-radius: 4px; padding: 2px 7px;
+    pointer-events: none;
+  }
+  .tip {
+    position: absolute;
+    display: none;
+    pointer-events: none;
+    background: rgba(11, 14, 20, 0.96);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    line-height: 1.55;
+    color: var(--text-primary);
+    max-width: 360px;
+    z-index: 5;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+  }
+  .tip b { color: var(--text-primary); }
+  .tip .tr { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  svg text { font-family: 'JetBrains Mono', monospace; font-size: 10px; fill: var(--text-muted); }
+  svg .grid { stroke: var(--border); stroke-width: 1; }
+  svg .zone { fill: rgba(79, 209, 197, 0.07); stroke: rgba(79, 209, 197, 0.22); stroke-dasharray: 3 3; }
+  svg .zone-label { fill: rgba(79, 209, 197, 0.75); font-size: 9.5px; paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+  svg .wick-up { stroke: var(--buy); stroke-width: 1; }
+  svg .wick-dn { stroke: var(--sell); stroke-width: 1; }
+  svg .body-up { fill: var(--buy); }
+  svg .body-dn { fill: var(--sell); }
+  svg .vol-up { fill: rgba(74, 222, 128, 0.28); }
+  svg .vol-dn { fill: rgba(248, 113, 113, 0.28); }
+  svg .line-close { fill: none; stroke: var(--accent); stroke-width: 1.6; }
+  svg .area-close { fill: rgba(79, 209, 197, 0.08); stroke: none; }
+  svg .avg-buy { stroke: var(--buy); stroke-width: 1; stroke-dasharray: 5 4; opacity: 0.75; }
+  svg .avg-sell { stroke: var(--sell); stroke-width: 1; stroke-dasharray: 5 4; opacity: 0.75; }
+  svg .avg-label-buy, svg .avg-label-sell {
+    font-size: 9.5px; paint-order: stroke; stroke: var(--surface); stroke-width: 3.5px; stroke-linejoin: round;
+  }
+  svg .avg-label-buy { fill: var(--buy); }
+  svg .avg-label-sell { fill: var(--sell); }
+  svg .last-line { stroke: var(--text-secondary); stroke-width: 1; stroke-dasharray: 1 3; }
+  svg .last-box { fill: var(--text-primary); }
+  svg .last-text { fill: var(--bg); font-weight: 600; }
+  svg .mk-buy { fill: var(--buy); stroke: var(--bg); stroke-width: 1; }
+  svg .mk-sell { fill: var(--sell); stroke: var(--bg); stroke-width: 1; }
+  svg .mk-count { font-size: 9px; font-weight: 600; }
+  svg .filed-dot { fill: var(--accent); }
+  svg .cross { stroke: var(--text-secondary); stroke-width: 1; stroke-dasharray: 3 3; }
+
+  .mc-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    border-top: 1px solid var(--border);
+  }
+  .tile { padding: 11px 16px; border-right: 1px solid var(--border); min-width: 0; }
+  .tile:last-child { border-right: none; }
+  .tile-l {
+    font-size: 10px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 4px;
+    white-space: nowrap;
+  }
+  .tile-v { font-family: 'JetBrains Mono', monospace; font-size: 15px; font-weight: 600; }
+  .tile-s {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    color: var(--text-muted);
+    margin-top: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .vdot {
+    display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+    margin-right: 5px; vertical-align: 0;
+  }
+  .rangebar {
+    height: 6px; border-radius: 3px; margin: 7px 0 2px;
+    background: linear-gradient(90deg, rgba(248,113,113,0.35), rgba(139,147,167,0.25), rgba(74,222,128,0.35));
+    position: relative;
+  }
+  .rangebar i {
+    position: absolute; top: -3px; width: 3px; height: 12px; border-radius: 2px;
+    background: var(--text-primary); transform: translateX(-1px);
+  }
+
+  .mc-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 10px 18px;
+    border-top: 1px solid var(--border);
+    background: var(--bg);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11.5px;
+    color: var(--text-secondary);
+  }
+  .mc-foot b.up, .mc-foot b.down { font-weight: 600; }
+  .mc-actions { display: flex; gap: 6px; }
+  .btn {
+    color: var(--accent);
+    background: transparent;
+    text-decoration: none;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11.5px;
+    padding: 4px 9px;
+    border-radius: 4px;
+    border: 1px solid var(--accent-dim);
+    cursor: pointer;
+  }
+  .btn:hover { background: var(--accent-dim); }
+
+  .mc-trades { display: none; padding: 4px 18px 16px; background: var(--bg); }
+  .mc-trades.open { display: block; }
+  .trade-table {
+    width: 100%;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11.5px;
+    border-collapse: collapse;
+  }
+  .trade-table th {
+    color: var(--text-muted);
+    font-weight: 500;
+    text-align: left;
+    padding: 7px 8px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  .trade-table td { padding: 7px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .trade-table .num { text-align: right; white-space: nowrap; }
+  .tx-buy  { color: var(--buy); font-weight: 600; white-space: nowrap; }
+  .tx-sell { color: var(--sell); font-weight: 600; white-space: nowrap; }
+  .tag {
+    display: inline-block;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 10px;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    margin-left: 4px;
+    white-space: nowrap;
+  }
+  .tag-D { color: var(--accent); border-color: var(--accent-dim); }
+  .tag-S { color: var(--mega); border-color: #4a3a1f; }
+  .m-open-mkt { color: var(--text-primary); border-color: var(--text-muted); }
+
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    line-height: 1.7;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .banner {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    padding: 10px 14px;
+    border-radius: 6px;
+    margin-bottom: 16px;
+    border: 1px solid #4a3a1f;
+    background: rgba(251, 191, 36, 0.06);
+    color: var(--mega);
+    display: none;
+  }
+
+  .source-line {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+
+  details.notes {
+    margin-top: 20px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+  }
+  details.notes summary {
+    cursor: pointer;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+  }
+  details.notes ul { margin: 10px 0 2px; padding-left: 18px; }
+
+  @media (max-width: 800px) {
+    header, main { padding-left: 16px; padding-right: 16px; }
+    .mc-head { grid-template-columns: 44px 1fr auto; row-gap: 6px; padding: 12px 14px; }
+    .mc-rank, .mc-company { display: none; }
+    .mc-head .dir { grid-column: 1 / 2; }
+    .mc-price { grid-column: 2 / 4; }
+    .legend { margin-left: 0; }
+    .tile { border-bottom: 1px solid var(--border); }
+    .trade-table .opt { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="title">market<span>//</span>insider-movers</div>
+  <div class="nav">
+    <a href="/">news</a>
+    <a href="/insider">insider</a>
+    <a href="/movers" class="active">movers</a>
+  </div>
+  <div class="status">
+    <span class="pulse" id="pulse"></span>
+    <span id="feed-status">connecting...</span>
+  </div>
+</header>
+
+<main>
+  <div class="stats-row" id="stats-row"></div>
+  <div class="banner" id="banner"></div>
+
+  <div class="filter-bar">
+    <select id="rank-filter" aria-label="rank by">
+      <option value="score">top 5 by signal score</option>
+      <option value="filings">top 5 by # filings</option>
+      <option value="shares">top 5 by shares traded</option>
+    </select>
+    <select id="days-filter" aria-label="insider window">
+      <option value="7">filings: last 7 days</option>
+      <option value="14">filings: last 14 days</option>
+      <option value="30">filings: last 30 days</option>
+    </select>
+    <div class="range-toggle" id="range-toggle" role="group" aria-label="chart range">
+      <button data-range="1M">1M</button>
+      <button data-range="3M">3M</button>
+      <button data-range="6M">6M</button>
+      <button data-range="1Y">1Y</button>
+    </div>
+    <div class="legend">
+      <span><svg class="lg-ico" viewBox="0 0 12 12"><path d="M6 1l-5.5 10h11z" fill="#4ade80"/></svg> insider buy</span>
+      <span><svg class="lg-ico" viewBox="0 0 12 12"><path d="M6 11l-5.5 -10h11z" fill="#f87171"/></svg> insider sell</span>
+      <span><svg class="lg-ico" viewBox="0 0 12 12"><circle cx="6" cy="6" r="3" fill="#4fd1c5"/></svg> filed</span>
+      <span><span class="lg-zone"></span> insider window</span>
+      <span><svg class="lg-ico lg-wide" viewBox="0 0 18 12"><line x1="0" x2="18" y1="6" y2="6" stroke="#8b93a7" stroke-width="1.4" stroke-dasharray="4 3"/></svg> insider avg</span>
+    </div>
+  </div>
+
+  <div id="movers-list">
+    <div class="empty-state">loading top insider stocks + prices...<br>
+      <span style="font-size:11.5px">first load can take a few seconds while prices download</span></div>
+  </div>
+
+  <div class="source-line" id="source-line"></div>
+
+  <details class="notes">
+    <summary>data notes &amp; limits</summary>
+    <ul>
+      <li><b>Prices</b>: Yahoo Finance daily bars for <code>XXXX.KL</code>, delayed ~15 min. Not tick data and not an official Bursa feed.</li>
+      <li><b>Caching</b>: each stock is fetched at most once per ~10 min during Bursa hours (~60 min otherwise), shared by every open browser. If Yahoo rate-limits the server, the tab pauses fetching and shows cached data.</li>
+      <li><b>Ranking</b>: only stocks the insider signal engine scored &gt; 0 in the chosen window are ranked (same rule as the insider tab). Capped at 5 to keep Yahoo traffic low.</li>
+      <li><b>Markers</b> sit on the trade date (<i>date of change</i>). Filings are usually published 1–3+ days later, so part of the move can happen before the public knows.</li>
+      <li><b>Net shares</b> combine director (S219) and substantial holder (S138) filings, de-duplicated per person/date/size. Deemed/indirect interests can still report one deal more than once, so the numbers can differ from the insider tab, which counts director filings only.</li>
+      <li><b>Insider avg price</b> uses only filings that state a per-share price. Method tags (open-mkt, off-mkt, esos…) are best-effort guesses from the filing text.</li>
+      <li>Informational only, not investment advice.</li>
+    </ul>
+  </details>
+</main>
+
+<script>
+{% raw %}
+const RANGES = { '1M': 22, '3M': 66, '6M': 130, '1Y': 100000 };
+const RANK_LABELS = { score: 'signal score', filings: '# filings', shares: 'shares traded' };
+const LIMIT = 5;
+const REFRESH_MS = 5 * 60 * 1000;
+
+const state = { rank: 'score', days: '7', range: '3M' };
+let payload = null;
+const openTrades = new Set();
+let pendingTimer = null;
+
+// ── formatting ────────────────────────────────────────────────────
+function esc(s) {
+  if (s === null || s === undefined) return '';
+  return String(s).replace(/[<>&"']/g, c => ({
+    '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;'
+  })[c]);
+}
+function safeId(code) { return String(code).replace(/[^A-Za-z0-9_-]/g, '_'); }
+function fmtPrice(p) {
+  if (p === null || p === undefined || isNaN(p)) return '—';
+  return p < 1 ? p.toFixed(3) : p.toFixed(2);
+}
+function fmtPct(v, digits = 1) {
+  if (v === null || v === undefined || isNaN(v)) return '—';
+  return (v > 0 ? '+' : '') + v.toFixed(digits) + '%';
+}
+function pctClass(v) {
+  if (v === null || v === undefined || isNaN(v)) return 'flat';
+  return v > 0 ? 'up' : v < 0 ? 'down' : 'flat';
+}
+function fmtShares(n) {
+  if (n === null || n === undefined) return '—';
+  const a = Math.abs(n);
+  if (a >= 1e9) return (n / 1e9).toFixed(2).replace(/\.?0+$/, '') + 'B';
+  if (a >= 1e6) return (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M';
+  if (a >= 1e3) return (n / 1e3).toFixed(0) + 'K';
+  return String(n);
+}
+function fmtSigned(n) {
+  if (!n) return '0';
+  return (n > 0 ? '+' : '−') + fmtShares(Math.abs(n));
+}
+function fmtInt(n) { return (n === null || n === undefined) ? '—' : Number(n).toLocaleString(); }
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const DOW = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+function parseDay(d) { const [y, m, dd] = d.split('-').map(Number); return new Date(Date.UTC(y, m - 1, dd)); }
+function fmtDay(d) { if (!d) return '—'; const x = parseDay(d); return x.getUTCDate() + ' ' + MONTHS[x.getUTCMonth()]; }
+function fmtDayLong(d) { const x = parseDay(d); return DOW[x.getUTCDay()] + ' ' + x.getUTCDate() + ' ' + MONTHS[x.getUTCMonth()] + ' ' + x.getUTCFullYear(); }
+function timeAgo(iso) {
+  if (!iso) return '--';
+  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+  if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+  return Math.floor(diff / 86400) + 'd ago';
+}
+function clockTime(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+function scoreClass(s) { return s >= 10 ? 'score-mega' : s >= 7 ? 'score-strong' : 'score-med'; }
+// price_context verdict emoji → colour (drawn as a dot: emoji look different on every OS)
+const VERDICT_COLORS = { '🔴': '#f87171', '🟠': '#fb923c', '🟢': '#4ade80', '🟡': '#fbbf24', '🔵': '#60a5fa' };
+function verdictDot(v) {
+  const c = v && VERDICT_COLORS[v.emoji];
+  return c ? `<span class="vdot" style="background:${c}"></span>` : '';
+}
+
+// ── URL state (so a view can be bookmarked) ───────────────────────
+function readState() {
+  const q = new URLSearchParams(location.search);
+  if (RANK_LABELS[q.get('rank')]) state.rank = q.get('rank');
+  if (['7', '14', '30'].includes(q.get('days'))) state.days = q.get('days');
+  if (RANGES[q.get('range')]) state.range = q.get('range');
+}
+function writeState() {
+  const q = new URLSearchParams({ rank: state.rank, days: state.days, range: state.range });
+  history.replaceState(null, '', location.pathname + '?' + q.toString());
+}
+function syncControls() {
+  document.getElementById('rank-filter').value = state.rank;
+  document.getElementById('days-filter').value = state.days;
+  document.querySelectorAll('#range-toggle button').forEach(b =>
+    b.setAttribute('aria-pressed', b.dataset.range === state.range ? 'true' : 'false'));
+}
+
+// ── data ──────────────────────────────────────────────────────────
+async function load() {
+  clearTimeout(pendingTimer);
+  try {
+    const url = `/api/movers?rank=${encodeURIComponent(state.rank)}&days=${encodeURIComponent(state.days)}&limit=${LIMIT}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    payload = await res.json();
+  } catch (err) {
+    document.getElementById('feed-status').textContent = 'dashboard API error: ' + err.message;
+    document.getElementById('pulse').className = 'pulse off';
+    return;
+  }
+  renderAll();
+  // Prices still downloading in the background? Pick them up shortly.
+  if ((payload.stocks || []).some(s => s.price && s.price.status === 'pending')) {
+    pendingTimer = setTimeout(load, 8000);
+  }
+}
+
+function renderAll() {
+  renderStatus();
+  renderStats();
+  renderCards();
+}
+
+function renderStatus() {
+  const feed = payload.price_feed || {};
+  const pulse = document.getElementById('pulse');
+  const el = document.getElementById('feed-status');
+  const banner = document.getElementById('banner');
+  const fetched = (payload.stocks || []).map(s => s.price && s.price.fetched_at).filter(Boolean).sort();
+  const newest = fetched.length ? fetched[fetched.length - 1] : null;
+  const ttlMin = Math.round((feed.ttl_secs || 600) / 60);
+  const bursa = feed.market_open ? 'bursa open' : 'bursa closed';
+
+  let bannerText = '';
+  if (feed.cooldown_until) {
+    pulse.className = 'pulse warn';
+    el.textContent = `Yahoo cooldown until ${clockTime(feed.cooldown_until)} · showing cached prices`;
+    bannerText = `Yahoo rate-limited this server, so price fetching is paused until ${clockTime(feed.cooldown_until)}. Charts show the last cached data. Other Yahoo users on this box (fx / indices / gold / Telegram price context) count toward the same limit.`;
+  } else {
+    const failed = (payload.stocks || []).filter(s => s.price && s.price.status === 'error').length;
+    pulse.className = failed && failed === (payload.stocks || []).length ? 'pulse off' : 'pulse';
+    el.textContent = !(payload.stocks || []).length ? `${bursa} · no insider stocks to price`
+      : newest ? `prices ${timeAgo(newest)} · ${bursa} · refresh ≤${ttlMin}m`
+      : (failed ? 'price feed unavailable' : `${bursa} · waiting for prices`);
+  }
+  document.getElementById('source-line').textContent =
+    `prices: ${feed.source || 'Yahoo Finance'} · cached ≤${ttlMin}m per stock · insider data: Bursa filings (announcements_signal)`;
+  if (payload.error) bannerText = payload.error;
+  else if (payload.scored === false && (payload.stocks || []).length) {
+    bannerText = 'No signal scores found in this window (is signals_engine.py running?). Ranking falls back to all stocks with insider trades.';
+  }
+  banner.textContent = bannerText;
+  banner.style.display = bannerText ? 'block' : 'none';
+}
+
+function renderStats() {
+  const stocks = payload.stocks || [];
+  const buyers = stocks.filter(s => s.direction === 'buy').length;
+  const sellers = stocks.filter(s => s.direction === 'sell').length;
+  const moves = stocks.map(s => s.metrics && s.metrics.since_first_trade_pct).filter(v => v !== null && v !== undefined);
+  const avgMove = moves.length ? moves.reduce((a, b) => a + b, 0) / moves.length : null;
+  const feed = payload.price_feed || {};
+  const priced = stocks.filter(s => s.metrics).length;
+  const feedLabel = feed.cooldown_until ? 'cooldown' : !stocks.length ? '—'
+    : priced === stocks.length ? 'ok' : `${priced}/${stocks.length}`;
+  const feedClass = feed.cooldown_until || (stocks.length && priced < stocks.length)
+    ? 'color:var(--mega)' : 'color:var(--accent)';
+
+  document.getElementById('stats-row').innerHTML = `
+    <div class="stat-card"><div class="stat-label">top ${stocks.length || LIMIT} by</div>
+      <div class="stat-value small">${esc(RANK_LABELS[payload.params.rank] || payload.params.rank)}</div></div>
+    <div class="stat-card"><div class="stat-label">scored stocks (${payload.params.days}d)</div>
+      <div class="stat-value">${payload.eligible}</div></div>
+    <div class="stat-card"><div class="stat-label">net buying</div>
+      <div class="stat-value up">${buyers}</div></div>
+    <div class="stat-card"><div class="stat-label">net selling</div>
+      <div class="stat-value down">${sellers}</div></div>
+    <div class="stat-card"><div class="stat-label">avg move since insiders started</div>
+      <div class="stat-value ${pctClass(avgMove)}">${fmtPct(avgMove)}</div></div>
+    <div class="stat-card"><div class="stat-label">price feed</div>
+      <div class="stat-value small" style="${feedClass}">${feedLabel}</div></div>
+  `;
+}
+
+// ── cards ─────────────────────────────────────────────────────────
+function tile(label, valueHtml, subHtml, title) {
+  return `<div class="tile"${title ? ` title="${esc(title)}"` : ''}>
+    <div class="tile-l">${label}</div>
+    <div class="tile-v">${valueHtml}</div>
+    <div class="tile-s">${subHtml || '&nbsp;'}</div></div>`;
+}
+
+function statsHtml(s) {
+  const m = s.metrics;
+  if (!m) return '';
+  const verdict = m.verdict;
+  const latestSub = verdict ? `${verdictDot(verdict)}${esc(verdict.label)}`
+    : s.direction === 'sell' ? 'after insider selling' : `trade ${fmtDay(s.last_trade_date)}`;
+  const avgSide = m.vs_insider_avg_side;
+  const avgPrice = avgSide === 'sell' ? m.avg_sell_price : m.avg_buy_price;
+  const pos = m.range_pos_pct;
+  return `<div class="mc-stats">
+    ${tile('since insiders started', `<span class="${pctClass(m.since_first_trade_pct)}">${fmtPct(m.since_first_trade_pct)}</span>`,
+      m.first_trade_bar ? `from ${fmtPrice(m.first_trade_close)} on ${fmtDay(m.first_trade_bar)}` : 'trade date not in price history')}
+    ${tile('since latest trade', `<span class="${pctClass(m.since_latest_trade_pct)}">${fmtPct(m.since_latest_trade_pct)}</span>`,
+      latestSub, verdict ? verdict.label : '')}
+    ${tile(`vs insider avg ${avgSide || (s.direction === 'sell' ? 'sell' : 'buy')}`,
+      `<span class="${pctClass(m.vs_insider_avg_pct)}">${fmtPct(m.vs_insider_avg_pct)}</span>`,
+      avgPrice ? `insiders avg ${fmtPrice(avgPrice)}` : 'no per-share price filed')}
+    ${tile('volume 5d vs 20d', m.vol_ratio_5d !== null ? `<span class="${m.vol_ratio_5d >= 1.5 ? 'up' : 'flat'}">${m.vol_ratio_5d.toFixed(1)}×</span>` : '—',
+      m.vol_avg20 ? `avg ${fmtShares(m.vol_avg20)}/day` : 'no volume data')}
+    ${tile('1M change', `<span class="${pctClass(m.chg_1m_pct)}">${fmtPct(m.chg_1m_pct)}</span>`,
+      `3M ${fmtPct(m.chg_3m_pct)} · 5D ${fmtPct(m.chg_5d_pct)}`)}
+    ${tile('1Y range', pos !== null ? `${pos.toFixed(0)}%<div class="rangebar"><i style="left:${Math.max(0, Math.min(100, pos))}%"></i></div>` : '—',
+      `${fmtPrice(m.low_1y)} – ${fmtPrice(m.high_1y)}`)}
+  </div>`;
+}
+
+function tradesHtml(s) {
+  const rows = (s.trades || []).map(t => `
+    <tr>
+      <td>${esc(t.trade_date || '—')}</td>
+      <td class="opt">${esc(t.published_date || '—')}${t.lag_days ? ` <span class="muted">(+${t.lag_days}d)</span>` : ''}</td>
+      <td>${esc(t.person_name || '?')}<span class="tag tag-${t.filing}">${t.filing}</span></td>
+      <td class="${t.side === 'buy' ? 'tx-buy' : 'tx-sell'}">${t.side === 'buy' ? '↑ BUY' : '↓ SELL'}</td>
+      <td class="num">${fmtInt(t.shares)}</td>
+      <td class="num">${esc(t.consideration || '—')}</td>
+      <td><span class="tag ${t.method === 'open-mkt' ? 'm-open-mkt' : ''}">${esc(t.method)}</span></td>
+      <td class="opt">${esc(t.nature || '—')}</td>
+    </tr>`).join('');
+  return `<table class="trade-table">
+    <thead><tr><th>trade date</th><th class="opt">filed</th><th>person / entity</th><th>side</th>
+      <th class="num">shares</th><th class="num">price</th><th>method</th><th class="opt">nature</th></tr></thead>
+    <tbody>${rows || '<tr><td colspan="8" class="muted">no parsed trades</td></tr>'}</tbody></table>`;
+}
+
+function chartBlock(s) {
+  const p = s.price || {};
+  const id = safeId(s.stock_code);
+  if (p.bars && p.bars.length) {
+    const stale = p.status === 'stale'
+      ? `<div class="stale-flag">cached ${timeAgo(p.fetched_at)}${p.error ? ' · refresh failed' : ''}</div>` : '';
+    return `<div class="mc-chart" id="chart-${id}">${stale}</div>`;
+  }
+  const sym = esc(p.symbol || s.ticker);
+  const msg = p.status === 'pending' ? 'downloading prices… this card will refresh automatically'
+    : p.status === 'cooldown' ? 'price fetching paused (Yahoo rate-limit protection)'
+    : p.error_kind === 'setup' ? 'price feed not set up on the server'
+    : p.error_kind === 'rate_limit' ? `Yahoo rate-limited this server — ${sym} will load after the cooldown`
+    : p.error_kind === 'network' ? `couldn't reach Yahoo for ${sym} — retrying in a few minutes`
+    : `no price data for ${sym} on Yahoo (common for LEAP-market / new listings)`;
+  return `<div class="mc-chart-empty">${msg}${p.error && p.status !== 'pending' ? `<br><span class="muted">${esc(p.error)}</span>` : ''}</div>`;
+}
+
+function cardHtml(s, i) {
+  const m = s.metrics || {};
+  const id = safeId(s.stock_code);
+  const dirLabel = s.direction === 'buy' ? 'NET BUY' : s.direction === 'sell' ? 'NET SELL' : 'MIXED';
+  const adv = (m.net_vs_adv !== null && m.net_vs_adv !== undefined && s.net_shares)
+    ? ` <span class="muted">(${Math.abs(m.net_vs_adv).toFixed(1)}× avg daily vol)</span>` : '';
+  const lag = s.avg_lag_days !== null && s.avg_lag_days !== undefined ? ` · avg filing lag ${s.avg_lag_days}d` : '';
+  const bursaUrl = `https://www.bursamalaysia.com/trade/trading_resources/listed_securities/listed_securities_search?stock_code=${encodeURIComponent(s.stock_code)}`;
+  const yahooUrl = `https://finance.yahoo.com/quote/${encodeURIComponent(s.ticker)}/`;
+  const open = openTrades.has(s.stock_code);
+
+  return `<article class="mover-card" data-code="${esc(s.stock_code)}">
+    <div class="mc-head">
+      <span class="mc-rank">#${i + 1}</span>
+      <span class="s-score ${scoreClass(s.score)}" title="insider signal score">${s.score}</span>
+      <span class="mc-code">${esc(s.stock_code)}</span>
+      <span class="mc-company" title="${esc(s.company_name || '')}">${esc(s.company_name || '')}</span>
+      <span class="dir dir-${s.direction}">${dirLabel}</span>
+      <span class="mc-price">
+        ${m.last ? `<span class="mc-last"><small>RM</small>${fmtPrice(m.last)}</span><span class="mc-day ${pctClass(m.day_chg_pct)}">${fmtPct(m.day_chg_pct, 2)}</span>`
+          : '<span class="mc-last muted" style="font-size:13px">no price</span>'}
+        <span class="mc-asof">${m.as_of ? 'as of ' + fmtDay(m.as_of) : esc(s.ticker)}</span>
+      </span>
+    </div>
+    ${chartBlock(s)}
+    ${statsHtml(s)}
+    <div class="mc-foot">
+      <span>${s.n_filings} filings · ${s.active_days} filing days · ${s.insiders} insider${s.insiders === 1 ? '' : 's'} ·
+        bought ${fmtShares(s.bought)} · sold ${fmtShares(s.sold)} ·
+        net <b class="${s.net_shares > 0 ? 'up' : s.net_shares < 0 ? 'down' : ''}">${fmtSigned(s.net_shares)}</b>${adv}${lag}</span>
+      <span class="mc-actions">
+        <button class="btn" data-toggle="${esc(s.stock_code)}">${open ? '▾' : '▸'} trades (${(s.trades || []).length})</button>
+        <a class="btn" href="${bursaUrl}" target="_blank" rel="noopener">bursa ↗</a>
+        <a class="btn" href="${yahooUrl}" target="_blank" rel="noopener">yahoo ↗</a>
+      </span>
+    </div>
+    <div class="mc-trades ${open ? 'open' : ''}" id="trades-${id}">${tradesHtml(s)}</div>
+  </article>`;
+}
+
+function renderCards() {
+  const list = document.getElementById('movers-list');
+  const stocks = payload.stocks || [];
+  if (!stocks.length) {
+    list.innerHTML = `<div class="empty-state">no scored insider activity in the last ${esc(payload.params.days)} days<br>
+      <span style="font-size:11.5px">try a longer window, or check the announcements_signal pipeline</span></div>`;
+    return;
+  }
+  list.innerHTML = stocks.map(cardHtml).join('');
+  renderCharts();
+}
+
+function renderCharts() {
+  (payload && payload.stocks || []).forEach(s => {
+    const el = document.getElementById('chart-' + safeId(s.stock_code));
+    if (el) renderChart(el, s);
+  });
+}
+
+// ── chart (plain SVG, no library) ─────────────────────────────────
+function niceTicks(lo, hi, count) {
+  const span = hi - lo;
+  if (!(span > 0)) return [lo];
+  const raw = span / count;
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const norm = raw / mag;
+  const step = (norm < 1.5 ? 1 : norm < 3 ? 2 : norm < 7 ? 5 : 10) * mag;
+  const ticks = [];
+  for (let v = Math.ceil(lo / step) * step; v <= hi + step * 1e-6; v += step) ticks.push(+v.toFixed(8));
+  return ticks;
+}
+
+function firstIdxOnOrAfter(bars, day) {
+  // index of the first bar dated >= day; -1 if day is after the last bar
+  if (!day || day > bars[bars.length - 1].t) return -1;
+  let lo = 0, hi = bars.length - 1;
+  while (lo < hi) { const mid = (lo + hi) >> 1; if (bars[mid].t >= day) hi = mid; else lo = mid + 1; }
+  return lo;
+}
+
+function renderChart(el, s) {
+  const all = s.price.bars;
+  const bars = all.slice(-(RANGES[state.range] || 66));
+  const offset = all.length - bars.length;
+  const n = bars.length;
+  const W = Math.max(300, el.clientWidth);
+  const H = window.innerWidth < 700 ? 230 : 280;
+  const P = { l: 10, r: 66, t: 18, b: 24 };
+  const volH = Math.round(H * 0.15), gap = 10;
+  const plotW = W - P.l - P.r;
+  const priceH = H - P.t - P.b - volH - gap;
+  const volTop = P.t + priceH + gap;
+  const step = plotW / n;
+  const bodyW = Math.max(1, Math.min(14, step * 0.62));
+  const X = i => P.l + step * (i + 0.5);
+  const m = s.metrics || {};
+
+  // price domain (+ insider avg lines when they are near the action)
+  let lo = Infinity, hi = -Infinity, maxV = 1;
+  for (const b of bars) { lo = Math.min(lo, b.l); hi = Math.max(hi, b.h); maxV = Math.max(maxV, b.v); }
+  const avgLines = [
+    { price: m.avg_buy_price, cls: 'buy', label: 'insider avg buy' },
+    { price: m.avg_sell_price, cls: 'sell', label: 'insider avg sell' },
+  ].filter(a => a.price && a.price >= lo * 0.8 && a.price <= hi * 1.25);
+  for (const a of avgLines) { lo = Math.min(lo, a.price); hi = Math.max(hi, a.price); }
+  const padY = (hi - lo) * 0.08 || hi * 0.02 || 0.01;
+  lo -= padY; hi += padY;
+  const Y = p => P.t + (hi - p) / (hi - lo) * priceH;
+  const YV = v => volTop + volH - (v / maxV) * volH;
+
+  // insider trades / filings per visible bar
+  const byBar = {}, filedByBar = {};
+  for (const t of s.trades || []) {
+    const i = firstIdxOnOrAfter(bars, t.trade_date);
+    if (i >= 0 && !(i === 0 && t.trade_date < bars[0].t)) {
+      (byBar[i] = byBar[i] || { buy: [], sell: [] })[t.side].push(t);
+    }
+    const f = firstIdxOnOrAfter(bars, t.published_date);
+    if (f >= 0 && !(f === 0 && t.published_date < bars[0].t)) {
+      (filedByBar[f] = filedByBar[f] || new Set()).add(t.ann_id);
+    }
+  }
+
+  let svg = '';
+
+  // insider window band: first trade → last filing
+  const zStartDay = s.first_trade_date, zEndDay = s.last_published || s.last_trade_date;
+  if (zStartDay && zEndDay && zStartDay <= bars[n - 1].t && zEndDay >= bars[0].t) {
+    const i0 = zStartDay < bars[0].t ? 0 : firstIdxOnOrAfter(bars, zStartDay);
+    let i1 = n - 1;
+    for (let k = n - 1; k >= 0; k--) { if (bars[k].t <= zEndDay) { i1 = k; break; } }
+    if (i0 >= 0 && i1 >= i0) {
+      const x0 = X(i0) - step / 2, x1 = X(i1) + step / 2;
+      svg += `<rect class="zone" x="${x0.toFixed(1)}" y="${P.t}" width="${Math.max(2, x1 - x0).toFixed(1)}" height="${priceH}"/>`;
+      if (x1 - x0 > 70) svg += `<text class="zone-label" x="${(x0 + 5).toFixed(1)}" y="${P.t + 11}">insider window</text>`;
+    }
+  }
+
+  // grid + right axis (labels under the last-price tag are skipped)
+  const lastY = Y(bars[n - 1].c);
+  for (const v of niceTicks(lo, hi, 4)) {
+    const y = Y(v);
+    if (y < P.t + 4 || y > P.t + priceH - 2) continue;
+    svg += `<line class="grid" x1="${P.l}" x2="${P.l + plotW}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}"/>`;
+    if (Math.abs(y - lastY) > 12) svg += `<text x="${P.l + plotW + 8}" y="${(y + 3).toFixed(1)}">${fmtPrice(v)}</text>`;
+  }
+  svg += `<line class="grid" x1="${P.l}" x2="${P.l + plotW}" y1="${volTop + volH}" y2="${volTop + volH}"/>`;
+
+  // volume + candles (one path per class keeps the DOM small)
+  let vUp = '', vDn = '', wUp = '', wDn = '', bUp = '', bDn = '';
+  const half = bodyW / 2;
+  bars.forEach((b, i) => {
+    const x = X(i), up = b.c >= b.o;
+    const vy = YV(b.v);
+    const vol = `M${(x - half).toFixed(1)} ${vy.toFixed(1)}h${bodyW.toFixed(1)}V${volTop + volH}h${(-bodyW).toFixed(1)}Z`;
+    if (up) vUp += vol; else vDn += vol;
+    if (n <= 140) {
+      const wick = `M${x.toFixed(1)} ${Y(b.h).toFixed(1)}V${Y(b.l).toFixed(1)}`;
+      const top = Math.min(Y(b.o), Y(b.c)), h = Math.max(1, Math.abs(Y(b.o) - Y(b.c)));
+      const body = `M${(x - half).toFixed(1)} ${top.toFixed(1)}h${bodyW.toFixed(1)}v${h.toFixed(1)}h${(-bodyW).toFixed(1)}Z`;
+      if (up) { wUp += wick; bUp += body; } else { wDn += wick; bDn += body; }
+    }
+  });
+  svg += `<path class="vol-up" d="${vUp}"/><path class="vol-dn" d="${vDn}"/>`;
+  if (n <= 140) {
+    svg += `<path class="wick-up" d="${wUp}"/><path class="wick-dn" d="${wDn}"/>`;
+    svg += `<path class="body-up" d="${bUp}"/><path class="body-dn" d="${bDn}"/>`;
+  } else {
+    const line = bars.map((b, i) => `${i ? 'L' : 'M'}${X(i).toFixed(1)} ${Y(b.c).toFixed(1)}`).join('');
+    svg += `<path class="area-close" d="${line}L${X(n - 1).toFixed(1)} ${P.t + priceH}L${X(0).toFixed(1)} ${P.t + priceH}Z"/>`;
+    svg += `<path class="line-close" d="${line}"/>`;
+  }
+
+  // insider average price lines
+  avgLines.forEach((a, k) => {
+    const y = Y(a.price);
+    svg += `<line class="avg-${a.cls}" x1="${P.l}" x2="${P.l + plotW}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}"/>`;
+    svg += `<text class="avg-label-${a.cls}" x="${P.l + 6 + k * 150}" y="${(y - 4).toFixed(1)}">${a.label} ${fmtPrice(a.price)}</text>`;
+  });
+
+  // last price line + axis tag
+  svg += `<line class="last-line" x1="${P.l}" x2="${P.l + plotW}" y1="${lastY.toFixed(1)}" y2="${lastY.toFixed(1)}"/>`;
+  svg += `<rect class="last-box" x="${P.l + plotW + 2}" y="${(lastY - 8).toFixed(1)}" width="${P.r - 4}" height="16" rx="3"/>`;
+  svg += `<text class="last-text" x="${P.l + plotW + 7}" y="${(lastY + 3.5).toFixed(1)}">${fmtPrice(bars[n - 1].c)}</text>`;
+
+  // insider markers: ▲ below the low (buy), ▼ above the high (sell);
+  // sized to the bar spacing so dense ranges (1Y, mobile) don't clump
+  const mk = Math.max(3.2, Math.min(6, step * 0.9)), mh = mk * 1.65;
+  for (const [key, g] of Object.entries(byBar)) {
+    const i = +key, b = bars[i], x = X(i);
+    if (g.buy.length) {
+      const y = Math.min(P.t + priceH - mh, Y(b.l) + 4);
+      svg += `<path class="mk-buy" d="M${x.toFixed(1)} ${y.toFixed(1)}l${-mk} ${mh.toFixed(1)}h${(2 * mk).toFixed(1)}z"/>`;
+      if (g.buy.length > 1) svg += `<text class="mk-count" x="${(x + mk + 1).toFixed(1)}" y="${(y + mh).toFixed(1)}" style="fill:var(--buy)">${g.buy.length}</text>`;
+    }
+    if (g.sell.length) {
+      const y = Math.max(P.t + mh, Y(b.h) - 4);
+      svg += `<path class="mk-sell" d="M${x.toFixed(1)} ${y.toFixed(1)}l${-mk} ${(-mh).toFixed(1)}h${(2 * mk).toFixed(1)}z"/>`;
+      if (g.sell.length > 1) svg += `<text class="mk-count" x="${(x + mk + 1).toFixed(1)}" y="${(y - mh + 7).toFixed(1)}" style="fill:var(--sell)">${g.sell.length}</text>`;
+    }
+  }
+  const dotR = Math.max(1.4, Math.min(2.6, step * 0.3));
+  for (const key of Object.keys(filedByBar)) {
+    svg += `<circle class="filed-dot" cx="${X(+key).toFixed(1)}" cy="${(volTop - gap / 2).toFixed(1)}" r="${dotR.toFixed(1)}"/>`;
+  }
+
+  // x-axis labels
+  let lastLabelX = -1e9;
+  bars.forEach((b, i) => {
+    let label = null;
+    if (n <= 30) { if (i % Math.ceil(n / 6) === 0) label = fmtDay(b.t); }
+    else if (i > 0 && b.t.slice(5, 7) !== bars[i - 1].t.slice(5, 7)) {
+      const d = parseDay(b.t);
+      label = MONTHS[d.getUTCMonth()] + (d.getUTCMonth() === 0 ? ' ' + d.getUTCFullYear() : '');
+    }
+    if (label && X(i) - lastLabelX > 44) {
+      svg += `<text x="${X(i).toFixed(1)}" y="${H - 7}" text-anchor="middle">${label}</text>`;
+      lastLabelX = X(i);
+    }
+  });
+
+  // crosshair + hit area
+  svg += `<line class="cross" x1="0" x2="0" y1="${P.t}" y2="${volTop + volH}" style="display:none"/>`;
+  svg += `<rect x="${P.l}" y="0" width="${plotW}" height="${H}" fill="transparent" class="hit"/>`;
+
+  const staleFlag = el.querySelector('.stale-flag');
+  el.innerHTML = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img"
+      aria-label="${esc(s.stock_code)} daily price chart with insider trades">${svg}</svg><div class="tip"></div>`;
+  if (staleFlag) el.prepend(staleFlag);
+
+  const svgEl = el.querySelector('svg'), tip = el.querySelector('.tip'), cross = el.querySelector('line.cross');
+  const move = ev => {
+    const rect = svgEl.getBoundingClientRect();
+    const i = Math.max(0, Math.min(n - 1, Math.floor((ev.clientX - rect.left - P.l) / step)));
+    const x = X(i);
+    cross.setAttribute('x1', x); cross.setAttribute('x2', x); cross.style.display = '';
+    tip.innerHTML = tipHtml(all, offset + i, byBar[i], filedByBar[i]);
+    tip.style.display = 'block';
+    let left = x + 14;
+    if (left + tip.offsetWidth > W - 4) left = x - tip.offsetWidth - 14;
+    tip.style.left = Math.max(4, left) + 'px';
+    tip.style.top = (P.t + 6) + 'px';
+  };
+  const leave = () => { cross.style.display = 'none'; tip.style.display = 'none'; };
+  svgEl.addEventListener('pointermove', move);
+  svgEl.addEventListener('pointerdown', move);
+  svgEl.addEventListener('pointerleave', leave);
+}
+
+function tipHtml(all, idx, trades, filed) {
+  const b = all[idx], prev = idx > 0 ? all[idx - 1] : null;
+  const chg = prev ? (b.c - prev.c) / prev.c * 100 : null;
+  const win = all.slice(Math.max(0, idx - 20), idx);
+  const avgV = win.length ? win.reduce((a, x) => a + x.v, 0) / win.length : 0;
+  let html = `<b>${fmtDayLong(b.t)}</b><br>
+    O ${fmtPrice(b.o)} H ${fmtPrice(b.h)} L ${fmtPrice(b.l)} C <b>${fmtPrice(b.c)}</b>
+    <span class="${pctClass(chg)}">${fmtPct(chg, 2)}</span><br>
+    <span class="muted">vol ${fmtShares(b.v)}${avgV ? ` · ${(b.v / avgV).toFixed(1)}× 20d avg` : ''}</span>`;
+  const list = trades ? [...trades.buy, ...trades.sell] : [];
+  list.slice(0, 6).forEach(t => {
+    const px = t.price && t.price >= b.c * 0.5 && t.price <= b.c * 2 ? ` @${fmtPrice(t.price)}` : '';
+    html += `<div class="tr"><span class="${t.side === 'buy' ? 'up' : 'down'}">${t.side === 'buy' ? '▲ BUY' : '▼ SELL'}</span>
+      ${fmtShares(t.shares)}${px} · ${esc(t.person_name || '?')} [${t.filing}] · ${esc(t.method)}
+      <span class="muted">· filed ${fmtDay(t.published_date)}</span></div>`;
+  });
+  if (list.length > 6) html += `<div class="muted">+${list.length - 6} more trades</div>`;
+  if (filed && filed.size) html += `<div style="color:var(--accent)">● ${filed.size} filing${filed.size > 1 ? 's' : ''} published</div>`;
+  return html;
+}
+
+// ── events ────────────────────────────────────────────────────────
+document.getElementById('rank-filter').addEventListener('change', e => { state.rank = e.target.value; writeState(); load(); });
+document.getElementById('days-filter').addEventListener('change', e => { state.days = e.target.value; writeState(); load(); });
+document.getElementById('range-toggle').addEventListener('click', e => {
+  const btn = e.target.closest('button[data-range]');
+  if (!btn) return;
+  state.range = btn.dataset.range;
+  writeState(); syncControls(); renderCharts();
+});
+document.getElementById('movers-list').addEventListener('click', e => {
+  const btn = e.target.closest('button[data-toggle]');
+  if (!btn) return;
+  const code = btn.dataset.toggle;
+  const panel = document.getElementById('trades-' + safeId(code));
+  if (openTrades.has(code)) openTrades.delete(code); else openTrades.add(code);
+  const open = openTrades.has(code);
+  panel.classList.toggle('open', open);
+  btn.textContent = btn.textContent.replace(/^[▸▾]/, open ? '▾' : '▸');
+});
+let resizeTimer = null;
+window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(renderCharts, 150); });
+
+readState();
+syncControls();
+load();
+setInterval(load, REFRESH_MS);
+{% endraw %}
+</script>
+
+</body>
+</html>
