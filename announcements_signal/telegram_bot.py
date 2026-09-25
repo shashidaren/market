@@ -59,7 +59,7 @@ FUTURE_DATE_BUFFER_DAYS = 1        # Allow 1 day ahead for timezone quirks, reje
 
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s [%(levelname)] %(message)s",
+    format="%(asctime)s [%(levelname)s] %(message)s",
     stream=sys.stdout,
 )
 log = logging.getLogger("insider_telegram")
@@ -330,20 +330,26 @@ def format_stock_alert(
     # ── Price Context & Stagnant Filter ──────────────────────────
     trade_date_iso = txn_d.isoformat() if txn_d else None
     price_ctx = None
-    price_move_pct = 0.0
+    price_move_pct = None
 
     if trade_date_iso:
         try:
             price_ctx = get_price_context(stock_code, trade_date_iso)
             if price_ctx:
-                # Attempt to extract move percentage. 
-                # Adjust key ('change_pct', 'move_pct', etc.) based on your price_context.py return structure
-                price_move_pct = price_ctx.get('change_pct', 0.0) if isinstance(price_ctx, dict) else getattr(price_ctx, 'change_pct', 0.0)
+                # price_context.py returns the move under 'pct_move'
+                # (was wrongly read as 'change_pct', which is always
+                # missing → 0.0 → every net-selling alert suppressed).
+                price_move_pct = price_ctx.get('pct_move') if isinstance(price_ctx, dict) else getattr(price_ctx, 'pct_move', None)
         except Exception:
             log.exception("Price context failed for %s", stock_code)
 
-    # FILTER: If price is stagnant (0.00%) AND insiders are selling, SUPPRESS alert
-    if price_move_pct == 0.0 and net_flow < 0:
+    # FILTER: If price is stagnant (0.00%) AND insiders are selling, SUPPRESS alert.
+    # Only applies when we HAVE a price reading: no Yahoo data must not
+    # suppress alerts (fail-open, same philosophy as the i_report filter).
+    if price_move_pct is None:
+        if net_flow < 0:
+            log.info("No price context for %s — stagnant-price filter skipped (fail-open)", stock_code)
+    elif price_move_pct == 0 and net_flow < 0:
         log.info(f"⚠️ Suppressed {stock_code}: Stagnant price (0.00%) + Insider Selling")
         return None
 
