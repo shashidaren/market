@@ -1,8 +1,10 @@
 # WORKFLOW.md — how this repo is managed
 
 Short version: **the server is your dev box, GitHub is your backup, and
-my (Arena) fixes arrive via the `arena/01a029a1-market` branch. Your own
-edits go straight to `main`.**
+`autosync.sh` keeps the two in step without you thinking about it.**
+
+Since 2026-11-01 the server runs a 5-minute timer that commits + pulls + pushes
+automatically. Manual git is now the exception, not the routine.
 
 ---
 
@@ -10,105 +12,160 @@ edits go straight to `main`.**
 
 ```
 GitHub main ................. your stable copy (what the server runs)
-your server main ............ where you edit + test + run cron
-arena/01a029a1-market ....... branch where Arena session fixes land
+your server main ............ where you edit + test + run cron   ←─┐
+arena/9332580f-market ....... branch where this session's work lives │
+                                                                     │
+autosync (every 5 min):  commit server edits → fetch → rebase → push ┘
 ```
 
-- You only ever push to **`main`** — that's your workflow.
-- Arena can only push to **`arena/01a029a1-market`** (session tracking).
-  Those commits are **not** on `main` until you merge them.
-- Both lines merge cleanly as long as you don't edit the same file I did
-  in the same place (if git complains, resolve it and tell me).
+- You normally work **directly on the server's `main`** (or edit the JSON the
+  dashboard reads) and autosync backs it up to GitHub.
+- Arena can only push to `arena/9332580f-market` (session tracking). Those
+  commits are **not** on `main` until you merge them.
+- Once the PR is merged, the server's next autosync tick pulls the changes in.
+  No `git fetch && git merge` ritual on the box.
 
 ---
 
-## A) Your everyday manual change (server)
+## A) Your everyday change (server)
 
 ```bash
 cd /opt/market
-# 1. edit files
+# 1. edit files (code, or data/bursa_tickers.json for the company list)
 
-# 2. sanity-test BEFORE committing
-python3 fx_signal/preflight_check.py        # or ./check_all.sh
-python3 -m py_compile fx_signal/*.py        # catches syntax errors fast
+# 2. sanity-test BEFORE the timer commits it
+python3 tickers.py check
+python3 -m py_compile app.py insider_movers.py top_mover.py tickers.py
+python3 -m unittest test_tickers.py test_top_mover.py
+# or the full sweep:
+./check_all.sh
 
-# 3. commit + push (one topic per commit)
-git add -A
-git commit -m "short description of the change"
-git push origin main
+# 3. that's it — autosync commits + pushes within 5 minutes
+./autosync.sh --status        # optional: see what is pending
+./autosync.sh                 # optional: push right now instead of waiting
 ```
 
-Done. GitHub now has a backup of your server state.
-
 **Rules that keep you safe:**
-- `git add -A` is fine: `.env`, `*.db`, `*.db.*` are gitignored — secrets
-  and trade data never get committed.
-- Never commit `.env` or `prices.db` manually (`git add -f` = footgun).
-- Small commits, then `git revert <hash>` if something breaks.
+
+- `.env`, `*.db`, `*.db.*` and logs are gitignored — secrets and trade data
+  never get committed. Never `git add -f` them.
+- Autosync commits *all* changed tracked files, so don't leave half-finished
+  experiments in the tree when you walk away. `git revert <hash>` if one slips
+  through.
+- If autosync pauses on a conflict it says so; §D has the 4-line recovery.
+- Keep each change small — a 5-minute commit cadence makes small commits
+  automatic.
+
+### Restart rules of thumb
+
+| Changed | Action |
+|---|---|
+| Python the cron pipeline runs (`collector.py`, `scorer.py`, `fx_signal/*`, `announcements_signal/*`) | nothing — next cron run imports the new code |
+| `app.py`, any `templates/*`, or `data/*.json` | `systemctl restart market-dashboard` (Flask caches templates and the registry is read at import) |
+| `install_cron.sh` / any systemd unit | re-run the installer |
 
 ---
 
 ## B) Getting fixes from me (Arena)
 
-After I finish a change, run:
+When I finish a change you get a PR from `arena/9332580f-market`. Either:
+
+**Merge the PR on GitHub** — then the server picks it up on the next autosync
+tick. This is the normal path and needs nothing on the box.
+
+Or, if you prefer the server to merge first:
 
 ```bash
 cd /opt/market
 git fetch origin
-git merge origin/arena/01a029a1-market      # bring my fixes into main
-# test, then:
-git push origin main
+git merge origin/arena/9332580f-market
+git push origin main          # or just let autosync push it
 ```
 
-No reinstall needed for pure code fixes — the cron pipeline picks up new
-code on the next run. If the change touched `install_cron.sh`, re-run it
-(see D).
+If both you and I edited the same lines, git will stop and tell you. Resolve,
+`git add`, `git rebase --continue` (or `git merge --continue`), then let
+autosync finish.
 
 ---
 
-## C) Deploy / restart cheat-sheet (fx_signal)
+## C) Deploy / restart cheat-sheet
 
 | Action | Command |
 |---|---|
-| Full preflight | `python3 fx_signal/preflight_check.py` |
-| Check pipeline is scheduled | `crontab -l \| grep -A3 "fx-signal-pipeline"` (must show a `*/5 * * * *` line) |
-| (Re)install cron | `cd fx_signal && FORCE=1 INTERVAL_MINUTES=5 ./install_cron.sh` |
-| Run pipeline now | `cd fx_signal && python3 price_collector.py && python3 signal_engine.py && python3 outcome_tracker.py && python3 telegram_bot.py` |
-| Watch logs | `tail -f /var/log/webscrap-fx-pipeline.log` |
-| Back up DB first | `cp fx_signal/prices.db fx_signal/prices.db.bak` |
-| Check timestamps migrated | `sqlite3 fx_signal/prices.db "SELECT bar_time FROM price_signals WHERE timeframe='1h' ORDER BY bar_time DESC LIMIT 3;"` — expect space format `2026-08-23 21:00:00` (no `T`, no `+00:00`) |
-| Latency probe | `cd fx_signal && python3 timing_probe.py` |
+| Registry check | `python3 tickers.py check` |
+| Registry gaps | `python3 tickers.py suggest --days 14` |
+| Add a listing | `python3 tickers.py add --code 1234 --name "..." --sector Tech` |
+| Full preflight | `./check_all.sh` |
+| Dashboard status | `systemctl status market-dashboard` |
+| Dashboard logs | `journalctl -u market-dashboard -n 80 --no-pager` |
+| Top mover, live | `python3 top_mover.py` |
+| Movers, live | `python3 insider_movers.py` |
+| Yahoo breaker | `python3 yahoo_client.py` |
+| Autosync status | `./autosync.sh --status` / `./deploy/install_autosync.sh --check` |
+| Autosync logs | `journalctl -u market-autosync.service -n 50 --no-pager` |
+| FX pipeline now | `cd fx_signal && python3 price_collector.py && python3 signal_engine.py && python3 outcome_tracker.py && python3 telegram_bot.py` |
+| Watch FX logs | `tail -f /var/log/webscrap-fx-pipeline.log` |
 
 ### Gotchas
-- **Market hours guard**: the pipeline skips all of Saturday and Sunday
-  before 21:00 UTC. A "stale bar" preflight WARN on the weekend is
-  expected, not a failure.
-- **DB migration is automatic** — `util.py` migrates legacy timestamps on
-  the first run of any stage. Keep a `prices.db.bak` before big upgrades.
-- **Rate limits**: keep `INTERVAL_MINUTES=5` (20 Yahoo calls per run).
-  `FX_BATCH_FETCH=1` in `.env` is the optional speed-up; it auto-falls
-  back per-symbol if Yahoo returns bad data.
+
+- **Market hours guard** (fx): the pipeline skips all of Saturday and Sunday
+  before 21:00 UTC. A "stale bar" preflight WARN on the weekend is expected.
+- **DB migration is automatic** — keep a `prices.db.bak` before big upgrades.
+- **Rate limits** are shared: fx, indices, Telegram price-context, `/movers`
+  and `/top` all use one Yahoo budget on one IP. `INTERVAL_MINUTES=5` for fx is
+  still the recommendation.
+- **Cron**: `crontab -l | grep -A3 "fx-signal-pipeline"` must show a job line.
 
 ---
 
-## D) If you've never run the installer (fresh box)
+## D) Autosync reference
 
 ```bash
-cd /opt/market/fx_signal
-# tokens load automatically from an existing .env; otherwise pass them:
-# TELEGRAM_BOT_TOKEN=... TELEGRAM_CHAT_ID=... ./install_cron.sh
-FORCE=1 INTERVAL_MINUTES=5 ./install_cron.sh
-crontab -l | grep -A3 "fx-signal-pipeline"   # verify a job line exists
+cd /opt/market
+./deploy/install_autosync.sh          # install the 5-minute systemd timer
+./deploy/install_autosync.sh --check  # is it installed / running?
+./deploy/install_autosync.sh --cron   # no systemd? use cron instead
+./deploy/install_autosync.sh --uninstall
+
+./autosync.sh --status                # branch, dirty files, ahead/behind, paused?
+./autosync.sh --dry-run               # what would happen, changes nothing
+./autosync.sh                         # sync now
+./autosync.sh --clear-conflict        # re-enable after a manual fix
 ```
 
-> Older versions of `install_cron.sh` wrote an EMPTY cron block (marker
-> lines with no job). If you see that, run the command above — it replaces
-> the block with a real `*/5 * * * * ... run_pipeline.sh` job and preserves
-> the rest of your `.env`.
+What a run does: **commit → fetch → rebase → push**. It never force-pushes,
+never touches `.env`/`*.db`, refuses mid-rebase, and skips a tick if another
+run is in flight.
+
+### If autosync pauses on a conflict
+
+```bash
+cd /opt/market
+git status                       # conflicted files
+# fix them and keep the server change:
+git add <files> && git rebase --continue
+# ...or discard the server change and take GitHub's version:
+git rebase --abort && git reset --hard origin/main
+./autosync.sh --clear-conflict
+./autosync.sh --status
+```
+
+`./check_all.sh` keeps warning about the conflict marker until it is cleared.
 
 ---
 
-## E) Speed of signal delivery (for context)
+## E) If you've never run an installer (fresh box)
+
+```bash
+cd /opt/market
+cp .env.example .env && chmod 600 .env && $EDITOR .env   # tokens + knobs
+FORCE=1 INTERVAL_MINUTES=5 ./fx_signal/install_cron.sh
+cd announcements_signal && ./install_cron.sh 2>/dev/null || true
+./deploy/install_autosync.sh
+./check_all.sh
+```
+
+### Speed of signal delivery (for context)
 
 Closed-bar strategy → delivery latency is not critical:
 
@@ -122,6 +179,7 @@ cron tick (≤5 min) → collector (~30–80s, ~5s with FX_BATCH_FETCH=1)
 
 ## One-line summary
 
-**Your edits → `git push origin main`. My fixes → `git merge
-origin/arena/01a029a1-market` then `git push origin main`. Server is
-always where it runs.**
+**Edit on the server → autosync commits + pushes it. Merge my PR → autosync
+pulls it. `main` is what runs.** If autosync is paused, fix it (§D) before
+doing anything else, because that is the only thing now standing between your
+server and GitHub.

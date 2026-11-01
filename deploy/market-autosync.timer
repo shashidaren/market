@@ -1,0 +1,13 @@
+[Unit]
+Description=Run market autosync every 5 minutes
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=5min
+AccuracySec=30s
+# Catch up after downtime instead of skipping the run entirely.
+Persistent=true
+Unit=market-autosync.service
+
+[Install]
+WantedBy=timers.target

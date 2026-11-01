@@ -1,0 +1,1397 @@
+{
+  "schema": 1,
+  "updated": "2026-11-01",
+  "about": "ONE entry per company. 'code' = Bursa stock code (null for foreign/macro companies that are tracked only because they move Malaysian headlines). 'name' is the display/canonical name. 'legal_name' is optional — the loader derives variants from it automatically (see tickers.py). 'aliases' are extra phrasings seen in real headlines, including nicknames, abbreviations and index names.",
+  "companies": [
+    {
+      "code": "0002",
+      "name": "Kotra Industries",
+      "sector": "Healthcare"
+    },
+    {
+      "code": "0021",
+      "name": "GHL Systems",
+      "sector": "Tech"
+    },
+    {
+      "code": "0032",
+      "name": "Redtone Digital",
+      "sector": "Telco"
+    },
+    {
+      "code": "0078",
+      "name": "GDex",
+      "sector": "Transport",
+      "aliases": [
+        "GD Express"
+      ]
+    },
+    {
+      "code": "0090",
+      "name": "Elsoft Research",
+      "sector": "Tech"
+    },
+    {
+      "code": "0097",
+      "name": "Vitrox",
+      "sector": "Tech"
+    },
+    {
+      "code": "0104",
+      "name": "Genetec Technology",
+      "sector": "Tech",
+      "aliases": [
+        "Genetec"
+      ]
+    },
+    {
+      "code": "0127",
+      "name": "JHM Consolidation",
+      "sector": "Tech",
+      "aliases": [
+        "JHM"
+      ]
+    },
+    {
+      "code": "0128",
+      "name": "Frontken",
+      "sector": "Tech",
+      "aliases": [
+        "Frontken Corp"
+      ]
+    },
+    {
+      "code": "0138",
+      "name": "MyEG Services",
+      "sector": "Tech",
+      "aliases": [
+        "MyEG"
+      ]
+    },
+    {
+      "code": "0163",
+      "name": "Careplus Group",
+      "sector": "Gloves"
+    },
+    {
+      "code": "0166",
+      "name": "Inari Amertron",
+      "sector": "Tech",
+      "aliases": [
+        "Inari"
+      ]
+    },
+    {
+      "code": "0172",
+      "name": "OCK Group",
+      "sector": "Telco"
+    },
+    {
+      "code": "0181",
+      "name": "Aemulus Holdings",
+      "sector": "Tech",
+      "aliases": [
+        "Aemulus"
+      ]
+    },
+    {
+      "code": "0200",
+      "name": "Revenue Group",
+      "sector": "Tech"
+    },
+    {
+      "code": "0208",
+      "name": "Greatech Technology",
+      "sector": "Tech",
+      "aliases": [
+        "Greatech"
+      ]
+    },
+    {
+      "code": "0219",
+      "name": "Reservoir Link",
+      "sector": "OilGas"
+    },
+    {
+      "code": "0270",
+      "name": "NationGate",
+      "sector": "Tech",
+      "aliases": [
+        "NATGATE",
+        "Nation Gate"
+      ]
+    },
+    {
+      "code": "1015",
+      "name": "AmBank",
+      "sector": "Banking",
+      "aliases": [
+        "AMMB"
+      ]
+    },
+    {
+      "code": "1023",
+      "name": "CIMB",
+      "sector": "Banking",
+      "aliases": [
+        "CIMB Group"
+      ]
+    },
+    {
+      "code": "1058",
+      "name": "Manulife Holdings",
+      "sector": "Insurance"
+    },
+    {
+      "code": "1066",
+      "name": "RHB Bank",
+      "sector": "Banking",
+      "aliases": [
+        "RHB",
+        "RHB Banking"
+      ]
+    },
+    {
+      "code": "1155",
+      "name": "Maybank",
+      "sector": "Banking",
+      "legal_name": "Malayan Banking Bhd",
+      "aliases": [
+        "Malayan Banking"
+      ]
+    },
+    {
+      "code": "1163",
+      "name": "Allianz Malaysia",
+      "sector": "Insurance"
+    },
+    {
+      "code": "1171",
+      "name": "MBSB Bank",
+      "sector": "Banking",
+      "aliases": [
+        "MBSB"
+      ]
+    },
+    {
+      "code": "1295",
+      "name": "Public Bank",
+      "sector": "Banking"
+    },
+    {
+      "code": "1597",
+      "name": "IGB",
+      "sector": "Property",
+      "legal_name": "IGB Berhad",
+      "aliases": [
+        "IGB Bhd"
+      ]
+    },
+    {
+      "code": "1619",
+      "name": "DRB-Hicom",
+      "sector": "Auto",
+      "aliases": [
+        "DRB Hicom"
+      ]
+    },
+    {
+      "code": "1651",
+      "name": "MRCB",
+      "sector": "Construction",
+      "aliases": [
+        "Malaysian Resources Corporation"
+      ]
+    },
+    {
+      "code": "1818",
+      "name": "Bursa Malaysia",
+      "sector": "Financial",
+      "legal_name": "Bursa Malaysia Bhd"
+    },
+    {
+      "code": "1899",
+      "name": "Batu Kawan",
+      "sector": "Conglomerate"
+    },
+    {
+      "code": "1961",
+      "name": "IOI Corp",
+      "sector": "Plantation",
+      "aliases": [
+        "IOI Corporation",
+        "IOICORP"
+      ]
+    },
+    {
+      "code": "2089",
+      "name": "United Plantations",
+      "sector": "Plantation",
+      "aliases": [
+        "UTDPLT"
+      ]
+    },
+    {
+      "code": "2127",
+      "name": "Comfort Gloves",
+      "sector": "Gloves"
+    },
+    {
+      "code": "2194",
+      "name": "MMC Corp",
+      "sector": "Transport",
+      "aliases": [
+        "MMC Corporation"
+      ]
+    },
+    {
+      "code": "2291",
+      "name": "Genting Plantations",
+      "sector": "Plantation",
+      "aliases": [
+        "GENP"
+      ]
+    },
+    {
+      "code": "2445",
+      "name": "KLK",
+      "sector": "Plantation",
+      "aliases": [
+        "Kuala Lumpur Kepong"
+      ]
+    },
+    {
+      "code": "2488",
+      "name": "Alliance Bank",
+      "sector": "Banking"
+    },
+    {
+      "code": "2836",
+      "name": "Carlsberg Malaysia",
+      "sector": "Consumer",
+      "aliases": [
+        "Carlsberg"
+      ]
+    },
+    {
+      "code": "2852",
+      "name": "Cahya Mata Sarawak",
+      "sector": "Materials",
+      "aliases": [
+        "CMS"
+      ]
+    },
+    {
+      "code": "3026",
+      "name": "Dutch Lady",
+      "sector": "Consumer",
+      "aliases": [
+        "Dutch Lady Milk"
+      ]
+    },
+    {
+      "code": "3034",
+      "name": "Hap Seng Consolidated",
+      "sector": "Conglomerate"
+    },
+    {
+      "code": "3158",
+      "name": "YNH Property",
+      "sector": "Property"
+    },
+    {
+      "code": "3182",
+      "name": "Genting",
+      "sector": "Conglomerate",
+      "legal_name": "Genting Berhad",
+      "aliases": [
+        "Genting Bhd"
+      ]
+    },
+    {
+      "code": "3255",
+      "name": "Heineken Malaysia",
+      "sector": "Consumer"
+    },
+    {
+      "code": "3301",
+      "name": "Hong Leong Industries",
+      "sector": "Conglomerate",
+      "aliases": [
+        "HLI"
+      ]
+    },
+    {
+      "code": "3336",
+      "name": "IJM Corp",
+      "sector": "Construction",
+      "aliases": [
+        "IJM Corporation",
+        "IJM"
+      ]
+    },
+    {
+      "code": "3395",
+      "name": "Berjaya Corp",
+      "sector": "Conglomerate",
+      "aliases": [
+        "Berjaya Corporation"
+      ]
+    },
+    {
+      "code": "3689",
+      "name": "F&N",
+      "sector": "Consumer",
+      "aliases": [
+        "Fraser & Neave",
+        "FNH"
+      ]
+    },
+    {
+      "code": "3794",
+      "name": "Malayan Cement",
+      "sector": "Materials"
+    },
+    {
+      "code": "3816",
+      "name": "MISC",
+      "sector": "OilGas",
+      "legal_name": "MISC Berhad",
+      "aliases": [
+        "MISC Bhd"
+      ]
+    },
+    {
+      "code": "3867",
+      "name": "MPI",
+      "sector": "Tech",
+      "aliases": [
+        "Malaysian Pacific Industries"
+      ]
+    },
+    {
+      "code": "4065",
+      "name": "PPB Group",
+      "sector": "Consumer",
+      "aliases": [
+        "PPB"
+      ]
+    },
+    {
+      "code": "4162",
+      "name": "BAT Malaysia",
+      "sector": "Consumer",
+      "aliases": [
+        "British American Tobacco"
+      ]
+    },
+    {
+      "code": "4197",
+      "name": "Sime Darby",
+      "sector": "Conglomerate",
+      "legal_name": "Sime Darby Bhd"
+    },
+    {
+      "code": "4235",
+      "name": "Lion Industries",
+      "sector": "Materials"
+    },
+    {
+      "code": "4405",
+      "name": "Tan Chong Motor",
+      "sector": "Auto"
+    },
+    {
+      "code": "4588",
+      "name": "UMW Holdings",
+      "sector": "Auto",
+      "aliases": [
+        "UMW"
+      ]
+    },
+    {
+      "code": "4634",
+      "name": "Pos Malaysia",
+      "sector": "Transport"
+    },
+    {
+      "code": "4677",
+      "name": "YTL Corp",
+      "sector": "Conglomerate",
+      "legal_name": "YTL Bhd",
+      "aliases": [
+        "YTL Corporation"
+      ]
+    },
+    {
+      "code": "4707",
+      "name": "Nestle Malaysia",
+      "sector": "Consumer",
+      "aliases": [
+        "Nestle"
+      ]
+    },
+    {
+      "code": "4715",
+      "name": "Genting Malaysia",
+      "sector": "Consumer",
+      "aliases": [
+        "GenM"
+      ]
+    },
+    {
+      "code": "4863",
+      "name": "Telekom Malaysia",
+      "sector": "Telco",
+      "legal_name": "TM Berhad",
+      "aliases": [
+        "TM Bhd"
+      ]
+    },
+    {
+      "code": "5000",
+      "name": "Hume Cement Industries",
+      "sector": "Materials",
+      "aliases": [
+        "Hume Cement"
+      ]
+    },
+    {
+      "code": "5005",
+      "name": "Unisem",
+      "sector": "Tech"
+    },
+    {
+      "code": "5012",
+      "name": "Ta Ann Holdings",
+      "sector": "Plantation",
+      "aliases": [
+        "Ta Ann"
+      ]
+    },
+    {
+      "code": "5014",
+      "name": "Malaysia Airports",
+      "sector": "Aviation",
+      "aliases": [
+        "MAHB"
+      ]
+    },
+    {
+      "code": "5015",
+      "name": "APM Automotive",
+      "sector": "Auto"
+    },
+    {
+      "code": "5020",
+      "name": "Glomac",
+      "sector": "Property"
+    },
+    {
+      "code": "5027",
+      "name": "Kim Loong Resources",
+      "sector": "Plantation"
+    },
+    {
+      "code": "5031",
+      "name": "Time dotCom",
+      "sector": "Telco",
+      "aliases": [
+        "TdC"
+      ]
+    },
+    {
+      "code": "5053",
+      "name": "OSK Holdings",
+      "sector": "Property"
+    },
+    {
+      "code": "5099",
+      "name": "Capital A",
+      "sector": "Aviation",
+      "aliases": [
+        "AirAsia"
+      ]
+    },
+    {
+      "code": "5102",
+      "name": "Guan Chong",
+      "sector": "Consumer"
+    },
+    {
+      "code": "5106",
+      "name": "Axis REIT",
+      "sector": "REITs"
+    },
+    {
+      "code": "5109",
+      "name": "YTL REIT",
+      "sector": "REITs",
+      "aliases": [
+        "YTL Hospitality REIT"
+      ]
+    },
+    {
+      "code": "5110",
+      "name": "UOA REIT",
+      "sector": "REITs"
+    },
+    {
+      "code": "5116",
+      "name": "Al-Aqar REIT",
+      "sector": "REITs",
+      "aliases": [
+        "Al-Aqar Healthcare REIT"
+      ]
+    },
+    {
+      "code": "5121",
+      "name": "Hektar REIT",
+      "sector": "REITs"
+    },
+    {
+      "code": "5123",
+      "name": "Sentral REIT",
+      "sector": "REITs"
+    },
+    {
+      "code": "5126",
+      "name": "Sarawak Oil Palms",
+      "sector": "Plantation"
+    },
+    {
+      "code": "5127",
+      "name": "AmanahRaya REIT",
+      "sector": "REITs"
+    },
+    {
+      "code": "5132",
+      "name": "Deleum",
+      "sector": "OilGas"
+    },
+    {
+      "code": "5133",
+      "name": "Petra Energy",
+      "sector": "Materials"
+    },
+    {
+      "code": "5138",
+      "name": "Hap Seng Plantations",
+      "sector": "Plantation"
+    },
+    {
+      "code": "5142",
+      "name": "Wasco",
+      "sector": "OilGas"
+    },
+    {
+      "code": "5148",
+      "name": "UEM Sunrise",
+      "sector": "Property"
+    },
+    {
+      "code": "5168",
+      "name": "Hartalega",
+      "sector": "Gloves",
+      "aliases": [
+        "Hartalega Holdings"
+      ]
+    },
+    {
+      "code": "5176",
+      "name": "Sunway REIT",
+      "sector": "REITs",
+      "aliases": [
+        "SREIT"
+      ]
+    },
+    {
+      "code": "5180",
+      "name": "Capitaland Malaysia Trust",
+      "sector": "REITs",
+      "aliases": [
+        "CLMT"
+      ]
+    },
+    {
+      "code": "5183",
+      "name": "Petronas Chemicals",
+      "sector": "OilGas",
+      "aliases": [
+        "PChem"
+      ]
+    },
+    {
+      "code": "5185",
+      "name": "Affin Bank",
+      "sector": "Banking",
+      "aliases": [
+        "Affin Group"
+      ]
+    },
+    {
+      "code": "5196",
+      "name": "Berjaya Food",
+      "sector": "Consumer",
+      "aliases": [
+        "BJFood"
+      ]
+    },
+    {
+      "code": "5199",
+      "name": "Hibiscus",
+      "sector": "OilGas",
+      "aliases": [
+        "Hibiscus Petroleum"
+      ]
+    },
+    {
+      "code": "5201",
+      "name": "Oldtown Berhad",
+      "sector": "Consumer",
+      "aliases": [
+        "Oldtown"
+      ]
+    },
+    {
+      "code": "5209",
+      "name": "Gas Malaysia",
+      "sector": "Utilities"
+    },
+    {
+      "code": "5210",
+      "name": "Bumi Armada",
+      "sector": "OilGas"
+    },
+    {
+      "code": "5211",
+      "name": "Sunway",
+      "sector": "Property",
+      "legal_name": "Sunway Berhad",
+      "aliases": [
+        "Sunway Bhd"
+      ]
+    },
+    {
+      "code": "5212",
+      "name": "Pavilion REIT",
+      "sector": "REITs"
+    },
+    {
+      "code": "5216",
+      "name": "Datasonic",
+      "sector": "Tech"
+    },
+    {
+      "code": "5218",
+      "name": "Sapura Energy",
+      "sector": "OilGas",
+      "aliases": [
+        "Sapura"
+      ]
+    },
+    {
+      "code": "5222",
+      "name": "FGV",
+      "sector": "Plantation",
+      "aliases": [
+        "FGV Holdings",
+        "FGV Palm"
+      ]
+    },
+    {
+      "code": "5225",
+      "name": "IHH Healthcare",
+      "sector": "Healthcare",
+      "aliases": [
+        "IHH"
+      ]
+    },
+    {
+      "code": "5227",
+      "name": "IGB REIT",
+      "sector": "REITs"
+    },
+    {
+      "code": "5236",
+      "name": "Matrix Concepts",
+      "sector": "Property"
+    },
+    {
+      "code": "5238",
+      "name": "AirAsia X",
+      "sector": "Aviation",
+      "aliases": [
+        "AAX"
+      ]
+    },
+    {
+      "code": "5243",
+      "name": "Velesto Energy",
+      "sector": "OilGas",
+      "aliases": [
+        "Velesto"
+      ]
+    },
+    {
+      "code": "5246",
+      "name": "Westports",
+      "sector": "Transport",
+      "aliases": [
+        "Westports Holdings"
+      ]
+    },
+    {
+      "code": "5248",
+      "name": "Bermaz Auto",
+      "sector": "Auto",
+      "aliases": [
+        "BAuto"
+      ]
+    },
+    {
+      "code": "5249",
+      "name": "IOI Properties",
+      "sector": "Property",
+      "aliases": [
+        "IOIPG"
+      ]
+    },
+    {
+      "code": "5250",
+      "name": "7-Eleven Malaysia",
+      "sector": "Consumer"
+    },
+    {
+      "code": "5253",
+      "name": "Econpile Holdings",
+      "sector": "Construction",
+      "aliases": [
+        "Econpile"
+      ]
+    },
+    {
+      "code": "5255",
+      "name": "Icon Offshore",
+      "sector": "OilGas"
+    },
+    {
+      "code": "5258",
+      "name": "Bank Islam",
+      "sector": "Banking",
+      "aliases": [
+        "BIMB"
+      ]
+    },
+    {
+      "code": "5263",
+      "name": "Sunway Construction",
+      "sector": "Construction",
+      "aliases": [
+        "SunCon"
+      ]
+    },
+    {
+      "code": "5264",
+      "name": "Malakoff",
+      "sector": "Utilities"
+    },
+    {
+      "code": "5272",
+      "name": "Ranhill Utilities",
+      "sector": "Utilities"
+    },
+    {
+      "code": "5281",
+      "name": "Advancecon",
+      "sector": "Construction"
+    },
+    {
+      "code": "5285",
+      "name": "Sime Darby Plantation",
+      "sector": "Plantation",
+      "aliases": [
+        "SD Plantation",
+        "SDPL",
+        "SIMEPLT"
+      ]
+    },
+    {
+      "code": "5288",
+      "name": "Sime Darby Property",
+      "sector": "Property",
+      "aliases": [
+        "SDPR"
+      ]
+    },
+    {
+      "code": "5292",
+      "name": "UWC",
+      "sector": "Tech",
+      "legal_name": "UWC Bhd"
+    },
+    {
+      "code": "5296",
+      "name": "MRDIY",
+      "sector": "Consumer",
+      "aliases": [
+        "Mr DIY",
+        "MR D.I.Y"
+      ]
+    },
+    {
+      "code": "5306",
+      "name": "Farm Fresh",
+      "sector": "Consumer"
+    },
+    {
+      "code": "5347",
+      "name": "Tenaga Nasional",
+      "sector": "Utilities",
+      "aliases": [
+        "TNB"
+      ]
+    },
+    {
+      "code": "5398",
+      "name": "Gamuda",
+      "sector": "Construction",
+      "legal_name": "Gamuda Bhd"
+    },
+    {
+      "code": "5401",
+      "name": "Tropicana Corporation",
+      "sector": "Property",
+      "aliases": [
+        "Tropicana"
+      ]
+    },
+    {
+      "code": "5665",
+      "name": "Southern Steel",
+      "sector": "Materials"
+    },
+    {
+      "code": "5681",
+      "name": "Petronas Dagangan",
+      "sector": "OilGas",
+      "aliases": [
+        "PetDag"
+      ]
+    },
+    {
+      "code": "5703",
+      "name": "Muhibbah Engineering",
+      "sector": "Construction"
+    },
+    {
+      "code": "5789",
+      "name": "LBS Bina Group",
+      "sector": "Property",
+      "aliases": [
+        "LBS Bina"
+      ]
+    },
+    {
+      "code": "5819",
+      "name": "Hong Leong Bank",
+      "sector": "Banking"
+    },
+    {
+      "code": "5878",
+      "name": "KPJ Healthcare",
+      "sector": "Healthcare"
+    },
+    {
+      "code": "5983",
+      "name": "MBM Resources",
+      "sector": "Auto",
+      "aliases": [
+        "MBMR"
+      ]
+    },
+    {
+      "code": "6012",
+      "name": "Maxis",
+      "sector": "Telco",
+      "legal_name": "Maxis Bhd"
+    },
+    {
+      "code": "6033",
+      "name": "Petronas Gas",
+      "sector": "OilGas",
+      "aliases": [
+        "PetGas"
+      ]
+    },
+    {
+      "code": "6139",
+      "name": "Takaful Malaysia",
+      "sector": "Insurance",
+      "aliases": [
+        "Syarikat Takaful Malaysia"
+      ]
+    },
+    {
+      "code": "6483",
+      "name": "Kenanga Investment Bank",
+      "sector": "Financial",
+      "aliases": [
+        "Kenanga Investment"
+      ]
+    },
+    {
+      "code": "6556",
+      "name": "Ann Joo Resources",
+      "sector": "Materials"
+    },
+    {
+      "code": "6599",
+      "name": "Aeon",
+      "sector": "Consumer",
+      "aliases": [
+        "AEON Co"
+      ]
+    },
+    {
+      "code": "6742",
+      "name": "YTL Power",
+      "sector": "Utilities",
+      "aliases": [
+        "YTL Power International",
+        "YTLPOWR"
+      ]
+    },
+    {
+      "code": "6888",
+      "name": "Axiata",
+      "sector": "Telco",
+      "aliases": [
+        "Axiata Group"
+      ]
+    },
+    {
+      "code": "6947",
+      "name": "CelcomDigi",
+      "sector": "Telco"
+    },
+    {
+      "code": "7022",
+      "name": "Globetronics",
+      "sector": "Tech"
+    },
+    {
+      "code": "7052",
+      "name": "Padini",
+      "sector": "Consumer",
+      "aliases": [
+        "Padini Holdings"
+      ]
+    },
+    {
+      "code": "7081",
+      "name": "Pharmaniaga",
+      "sector": "Healthcare"
+    },
+    {
+      "code": "7084",
+      "name": "QL Resources",
+      "sector": "Consumer"
+    },
+    {
+      "code": "7106",
+      "name": "Supermax",
+      "sector": "Gloves",
+      "aliases": [
+        "Supermax Corporation"
+      ]
+    },
+    {
+      "code": "7113",
+      "name": "Top Glove",
+      "sector": "Gloves",
+      "aliases": [
+        "Top Glove Corporation"
+      ]
+    },
+    {
+      "code": "7148",
+      "name": "Duopharma Biotech",
+      "sector": "Healthcare",
+      "aliases": [
+        "Duopharma"
+      ]
+    },
+    {
+      "code": "7153",
+      "name": "Kossan Rubber",
+      "sector": "Gloves",
+      "aliases": [
+        "Kossan"
+      ]
+    },
+    {
+      "code": "7160",
+      "name": "Pentamaster",
+      "sector": "Tech",
+      "aliases": [
+        "Pentamaster Corporation"
+      ]
+    },
+    {
+      "code": "7161",
+      "name": "Kerjaya Prospek",
+      "sector": "Construction",
+      "aliases": [
+        "Kerjaya"
+      ]
+    },
+    {
+      "code": "7204",
+      "name": "D&O Green",
+      "sector": "Tech",
+      "aliases": [
+        "D&O Green Technologies"
+      ]
+    },
+    {
+      "code": "7228",
+      "name": "T7 Global",
+      "sector": "OilGas"
+    },
+    {
+      "code": "7237",
+      "name": "Power Root",
+      "sector": "Consumer"
+    },
+    {
+      "code": "7250",
+      "name": "Uzma",
+      "sector": "OilGas"
+    },
+    {
+      "code": "7277",
+      "name": "Dialog Group",
+      "sector": "OilGas",
+      "aliases": [
+        "Dialog"
+      ]
+    },
+    {
+      "code": "7293",
+      "name": "Yinson",
+      "sector": "OilGas",
+      "aliases": [
+        "Yinson Holdings"
+      ]
+    },
+    {
+      "code": "8206",
+      "name": "Eco World",
+      "sector": "Property",
+      "aliases": [
+        "Eco World Development"
+      ]
+    },
+    {
+      "code": "8397",
+      "name": "Tiong Nam Logistics",
+      "sector": "Transport"
+    },
+    {
+      "code": "8583",
+      "name": "Mah Sing",
+      "sector": "Property",
+      "aliases": [
+        "Mah Sing Group"
+      ]
+    },
+    {
+      "code": "8621",
+      "name": "LPI Capital",
+      "sector": "Insurance"
+    },
+    {
+      "code": "8664",
+      "name": "SP Setia",
+      "sector": "Property",
+      "aliases": [
+        "S P Setia"
+      ]
+    },
+    {
+      "code": "8869",
+      "name": "Press Metal Aluminium",
+      "sector": "Materials",
+      "aliases": [
+        "Press Metal"
+      ]
+    },
+    {
+      "code": "8877",
+      "name": "Ekovest",
+      "sector": "Construction"
+    },
+    {
+      "code": "9059",
+      "name": "TSH Resources",
+      "sector": "Plantation"
+    },
+    {
+      "code": "9261",
+      "name": "Gadang Holdings",
+      "sector": "Construction",
+      "aliases": [
+        "Gadang"
+      ]
+    },
+    {
+      "code": "9296",
+      "name": "RCE Capital",
+      "sector": "Financial"
+    },
+    {
+      "code": "9334",
+      "name": "KESM Industries",
+      "sector": "Tech",
+      "aliases": [
+        "KESM"
+      ]
+    },
+    {
+      "code": "9679",
+      "name": "WCT Holdings",
+      "sector": "Construction"
+    },
+    {
+      "code": null,
+      "name": "AME Elite Consortium",
+      "sector": "Property",
+      "aliases": [
+        "AME Elite"
+      ]
+    },
+    {
+      "code": null,
+      "name": "Amona Group",
+      "sector": "Property"
+    },
+    {
+      "code": null,
+      "name": "ASB",
+      "sector": "GLC",
+      "aliases": [
+        "Amanah Saham Bumiputera"
+      ]
+    },
+    {
+      "code": null,
+      "name": "EPF",
+      "sector": "GLC",
+      "aliases": [
+        "Employees Provident Fund",
+        "KWSP"
+      ]
+    },
+    {
+      "code": null,
+      "name": "FBM ACE",
+      "sector": "Macro"
+    },
+    {
+      "code": null,
+      "name": "FBM Emas",
+      "sector": "Macro"
+    },
+    {
+      "code": null,
+      "name": "FBM KLCI",
+      "sector": "Macro",
+      "aliases": [
+        "KLCI"
+      ]
+    },
+    {
+      "code": null,
+      "name": "FBM Small Cap",
+      "sector": "Macro"
+    },
+    {
+      "code": null,
+      "name": "Godrej Consumer",
+      "sector": "Consumer"
+    },
+    {
+      "code": null,
+      "name": "Hextar Retail",
+      "sector": "Consumer"
+    },
+    {
+      "code": null,
+      "name": "Hong Leong Financial Group",
+      "sector": "Banking",
+      "aliases": [
+        "Hong Leong Financial",
+        "HLFG"
+      ]
+    },
+    {
+      "code": null,
+      "name": "Hup Seng Industries",
+      "sector": "Consumer",
+      "aliases": [
+        "Hup Seng"
+      ]
+    },
+    {
+      "code": null,
+      "name": "Industronics",
+      "sector": "Tech"
+    },
+    {
+      "code": null,
+      "name": "Inta Bina",
+      "sector": "Construction"
+    },
+    {
+      "code": null,
+      "name": "ITMAX System",
+      "sector": "Tech"
+    },
+    {
+      "code": null,
+      "name": "Khazanah Nasional",
+      "sector": "GLC",
+      "aliases": [
+        "Khazanah"
+      ]
+    },
+    {
+      "code": null,
+      "name": "KLCC REIT",
+      "sector": "REITs",
+      "aliases": [
+        "KLCCP Stapled",
+        "KLCCP",
+        "5235SS"
+      ]
+    },
+    {
+      "code": null,
+      "name": "KWAP",
+      "sector": "GLC",
+      "aliases": [
+        "Kumpulan Wang Persaraan",
+        "Retirement Fund Inc"
+      ]
+    },
+    {
+      "code": null,
+      "name": "Malaysia Airlines",
+      "sector": "Aviation",
+      "aliases": [
+        "MAB"
+      ]
+    },
+    {
+      "code": null,
+      "name": "Mi Technovation",
+      "sector": "Tech"
+    },
+    {
+      "code": null,
+      "name": "MN Holdings",
+      "sector": "Construction"
+    },
+    {
+      "code": null,
+      "name": "MOF Inc",
+      "sector": "GLC"
+    },
+    {
+      "code": null,
+      "name": "MTT Shipping and Logistics",
+      "sector": "Transport",
+      "aliases": [
+        "MTT Shipping"
+      ]
+    },
+    {
+      "code": null,
+      "name": "Perodua",
+      "sector": "Auto"
+    },
+    {
+      "code": null,
+      "name": "Petronas",
+      "sector": "OilGas",
+      "aliases": [
+        "Petroliam Nasional"
+      ]
+    },
+    {
+      "code": null,
+      "name": "PNB",
+      "sector": "GLC",
+      "legal_name": "Permodalan Nasional Berhad"
+    },
+    {
+      "code": null,
+      "name": "Proton",
+      "sector": "Auto"
+    },
+    {
+      "code": null,
+      "name": "Sabah Electricity",
+      "sector": "Utilities"
+    },
+    {
+      "code": null,
+      "name": "SD Guthrie",
+      "sector": "Plantation"
+    },
+    {
+      "code": null,
+      "name": "SK Hynix",
+      "sector": "Tech"
+    },
+    {
+      "code": null,
+      "name": "SOCSO",
+      "sector": "GLC",
+      "aliases": [
+        "Social Security Organisation",
+        "PERKESO"
+      ]
+    },
+    {
+      "code": null,
+      "name": "Stratus Global Holdings",
+      "sector": "Industrial",
+      "aliases": [
+        "Stratus Global"
+      ]
+    },
+    {
+      "code": null,
+      "name": "Super Micro",
+      "sector": "Tech"
+    },
+    {
+      "code": null,
+      "name": "Tabung Haji",
+      "sector": "GLC",
+      "aliases": [
+        "Lembaga Tabung Haji"
+      ]
+    },
+    {
+      "code": null,
+      "name": "Well Chip Group",
+      "sector": "Industrial",
+      "aliases": [
+        "Well Chip"
+      ]
+    }
+  ]
+}

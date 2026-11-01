@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>market // top mover</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap');
+
+  :root {
+    --bg: #0b0e14;
+    --surface: #131722;
+    --surface-hover: #171c29;
+    --border: #232838;
+    --text-primary: #e6e9ef;
+    --text-secondary: #8b93a7;
+    --text-muted: #565f78;
+    --accent: #4fd1c5;
+    --accent-dim: #2a5f5a;
+    --buy: #4ade80;
+    --sell: #f87171;
+    --mega: #fbbf24;
+    --violet: #a78bfa;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text-primary);
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+  }
+
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 20px 32px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+  .title span { color: var(--accent); }
+
+  .nav { display: flex; gap: 4px; font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+  .nav a {
+    color: var(--text-secondary);
+    text-decoration: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    transition: all 0.12s;
+  }
+  .nav a:hover { color: var(--text-primary); background: var(--surface); }
+  .nav a.active { color: var(--accent); background: var(--accent-dim); }
+
+  .status {
+    display: flex; align-items: center; gap: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+  .pulse {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--accent);
+    animation: pulse 2s infinite;
+  }
+  .pulse.warn { background: var(--mega); animation: none; }
+  .pulse.off { background: var(--sell); animation: none; }
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(79, 209, 197, 0.5); }
+    70% { box-shadow: 0 0 0 8px rgba(79, 209, 197, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(79, 209, 197, 0); }
+  }
+  @media (prefers-reduced-motion: reduce) { .pulse { animation: none; } }
+
+  main { max-width: 1200px; margin: 0 auto; padding: 28px 32px 60px; }
+
+  .banner {
+    display: none;
+    border: 1px solid #4a3a12;
+    background: rgba(251, 191, 36, 0.07);
+    color: #f3d38a;
+    font-size: 12.5px;
+    line-height: 1.5;
+    padding: 10px 14px;
+    border-radius: 6px;
+    margin-bottom: 18px;
+  }
+
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 13px 15px;
+  }
+  .stat-label {
+    font-size: 10.5px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 5px;
+  }
+  .stat-value { font-family: 'JetBrains Mono', monospace; font-size: 19px; font-weight: 600; }
+  .stat-value.small { font-size: 13.5px; padding-top: 3px; }
+
+  /* ── hero ─────────────────────────────────────────────────── */
+  .hero {
+    background: linear-gradient(180deg, #141a26 0%, var(--surface) 100%);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 22px 24px;
+    margin-bottom: 20px;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::after {
+    content: '';
+    position: absolute;
+    inset: auto -20% -60% -20%;
+    height: 160px;
+    background: radial-gradient(closest-side, rgba(79, 209, 197, 0.15), transparent);
+    pointer-events: none;
+  }
+  .hero-top {
+    display: flex;
+    gap: 24px;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    position: relative;
+    z-index: 1;
+  }
+  .hero-main { display: flex; gap: 22px; align-items: center; flex-wrap: wrap; min-width: 0; }
+
+  .gauge { position: relative; width: 118px; height: 118px; flex: 0 0 auto; }
+  .gauge svg { transform: rotate(-90deg); }
+  .gauge-center {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .gauge-center b { font-size: 26px; font-weight: 600; line-height: 1; }
+  .gauge-center span { font-size: 9.5px; color: var(--text-muted); margin-top: 4px;
+    text-transform: uppercase; letter-spacing: 0.07em; text-align: center; }
+
+  .hero-id { min-width: 0; }
+  .eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+  .hero-name {
+    font-size: 27px;
+    font-weight: 600;
+    line-height: 1.15;
+    margin-bottom: 4px;
+    overflow-wrap: anywhere;
+  }
+  .hero-name .code {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--accent);
+    margin-right: 10px;
+  }
+  .hero-meta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--text-secondary);
+    display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+  }
+  .chip {
+    border: 1px solid var(--border);
+    background: #0f131d;
+    border-radius: 999px;
+    padding: 2px 9px;
+    font-size: 10.5px;
+    color: var(--text-secondary);
+  }
+  .chip.hi { color: var(--accent); border-color: var(--accent-dim); }
+  .chip.warn { color: var(--mega); border-color: #4a3a12; }
+  .chip.dim { color: var(--text-muted); }
+
+  .hero-price { text-align: right; font-family: 'JetBrains Mono', monospace; }
+  .hero-price .px { font-size: 27px; font-weight: 600; line-height: 1.1; }
+  .hero-price .chg { font-size: 13px; margin-top: 4px; }
+
+  .eq {
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px dashed var(--border);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11.5px;
+    color: var(--text-secondary);
+    display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center;
+  }
+  .eq b { color: var(--text-primary); font-weight: 600; }
+  .eq .arrow { color: var(--text-muted); }
+
+  .reasons { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 14px; }
+  .reason {
+    font-size: 11.5px;
+    background: #0f131d;
+    border: 1px solid var(--border);
+    border-left: 2px solid var(--accent);
+    border-radius: 4px;
+    padding: 5px 9px;
+    color: var(--text-secondary);
+  }
+  .reason b { color: var(--accent); font-family: 'JetBrains Mono', monospace; }
+
+  /* ── chart ────────────────────────────────────────────────── */
+  .chart-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 18px 10px;
+    margin-bottom: 20px;
+  }
+  .chart-head {
+    display: flex; justify-content: space-between; align-items: center;
+    gap: 12px; flex-wrap: wrap; margin-bottom: 8px;
+  }
+  .chart-title { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-secondary); }
+  .range-toggle { display: flex; gap: 2px; }
+  .range-toggle button {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 4px 9px;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .range-toggle button:hover { color: var(--text-primary); background: var(--surface-hover); }
+  .range-toggle button[aria-pressed="true"] {
+    color: var(--accent); border-color: var(--accent-dim); background: var(--accent-dim);
+  }
+  #chart { width: 100%; display: block; }
+  .chart-note { font-size: 10.5px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; }
+
+  /* ── runner table ─────────────────────────────────────────── */
+  .section-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    margin: 26px 0 10px;
+  }
+  .table-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow-x: auto;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th, td { padding: 9px 12px; text-align: right; white-space: nowrap; }
+  th:first-child, td:first-child, th:nth-child(2), td:nth-child(2),
+  th:nth-child(3), td:nth-child(3) { text-align: left; }
+  thead th {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    font-weight: 500;
+    border-bottom: 1px solid var(--border);
+    background: #10141d;
+  }
+  tbody tr { border-bottom: 1px solid #1a1f2c; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: var(--surface-hover); }
+  tbody tr.picked { background: rgba(79, 209, 197, 0.05); }
+  td.mono, .mono { font-family: 'JetBrains Mono', monospace; }
+  .prob-cell { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
+  .prob-bar { width: 64px; height: 4px; background: #1e2433; border-radius: 2px; overflow: hidden; }
+  .prob-bar i { display: block; height: 100%; background: var(--accent); border-radius: 2px; }
+  .up { color: var(--buy); }
+  .down { color: var(--sell); }
+  .flat { color: var(--text-secondary); }
+  .muted { color: var(--text-muted); }
+  .tiny { font-size: 11px; }
+
+  .empty-state {
+    text-align: center;
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    padding: 46px 12px;
+    background: var(--surface);
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    line-height: 1.9;
+  }
+
+  .source-line {
+    margin-top: 18px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    color: var(--text-muted);
+    line-height: 1.7;
+  }
+
+  details.notes {
+    margin-top: 22px;
+    border-top: 1px solid var(--border);
+    padding-top: 14px;
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+  details.notes summary { cursor: pointer; color: var(--text-muted); font-size: 11.5px; }
+  details.notes ul { margin: 10px 0 0; padding-left: 18px; line-height: 1.85; }
+  details.notes code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    background: #0f131d;
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+
+  @media (max-width: 640px) {
+    header { padding: 16px 18px; }
+    main { padding: 20px 18px 48px; }
+    .hero { padding: 18px; }
+    .hero-name { font-size: 22px; }
+    .hero-price { text-align: left; }
+    .hero-price .px { font-size: 22px; }
+    .gauge { width: 96px; height: 96px; }
+    .gauge-center b { font-size: 22px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="title">market<span>//</span>top-mover</div>
+  <div class="nav">
+    <a href="/">news</a>
+    <a href="/insider">insider</a>
+    <a href="/movers">movers</a>
+    <a href="/top" class="active">top</a>
+  </div>
+  <div class="status">
+    <span class="pulse" id="pulse"></span>
+    <span id="feed-status">connecting...</span>
+  </div>
+</header>
+
+<main>
+  <div class="banner" id="banner"></div>
+  <div class="stats-row" id="stats-row"></div>
+  <div id="hero-slot">
+    <div class="empty-state">finding the highest-probability mover...<br>
+      <span style="font-size:11.5px">first load can take a few seconds while prices download</span></div>
+  </div>
+  <div id="chart-slot"></div>
+  <div class="section-title" id="runners-title" style="display:none">runners-up</div>
+  <div id="runners-slot"></div>
+  <div class="source-line" id="source-line"></div>
+
+  <details class="notes">
+    <summary>how the probability is calculated &amp; what it does not mean</summary>
+    <ul>
+      <li><b>One stock.</b> The tab ranks a shortlist, then shows only the highest-probability name — the /movers tab is the one that shows five.</li>
+      <li><b>Universe.</b> Stocks the insider signal engine scored in the window, plus stocks mentioned in recently scored headlines. Only a shortlist is priced, because Yahoo is rate-limited and shared with the FX, indices and Telegram jobs on this server.</li>
+      <li><b>Probability.</b> Each stock's own 1-year daily history gives the empirical frequency of a ≥<span id="thr-note">3.0</span>% day (close vs previous close). That base rate is multiplied by today's conditions: volume expansion, volatility regime vs its 1-year median, position in the 52-week range, news mentions, insider conviction and the move already in progress. The hero card shows the arithmetic, so the number is auditable.</li>
+      <li><b>Not calibrated.</b> The multiplier weights are hand-set heuristics; there is no back-test behind them. Treat the score as a ranking aid and a prompt to look at the chart — not as a win rate.</li>
+      <li><b>Prices</b>: Yahoo Finance daily bars for <code>XXXX.KL</code>, delayed ~15 min, shared cache with /movers (≤10 min during Bursa hours, ≤60 min otherwise). Not an official Bursa feed.</li>
+      <li><b>News data</b> is as good as the scorer's company matching (<code>tickers.py</code>). If a company name is missing from the registry, its headlines never reach this tab — run <code>python3 tickers.py suggest</code>.</li>
+      <li>Informational only, not investment advice.</li>
+    </ul>
+  </details>
+</main>
+
+<script>
+{% raw %}
+const RANGES = { '1M': 22, '3M': 66, '6M': 130, '1Y': 100000 };
+const REFRESH_MS = 5 * 60 * 1000;
+const NEWS_DAYS = 2;
+const state = { range: '3M', days: '10' };
+let payload = null;
+let pendingTimer = null;
+
+// ── formatting ────────────────────────────────────────────────────
+function esc(s) {
+  if (s === null || s === undefined) return '';
+  return String(s).replace(/[<>&"']/g, c => ({
+    '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;'
+  })[c]);
+}
+function fmtPrice(p) {
+  if (p === null || p === undefined || isNaN(p)) return '—';
+  return p < 1 ? p.toFixed(3) : p.toFixed(2);
+}
+function fmtPct(v, digits = 1) {
+  if (v === null || v === undefined || isNaN(v)) return '—';
+  return (v > 0 ? '+' : '') + v.toFixed(digits) + '%';
+}
+function pctClass(v) {
+  if (v === null || v === undefined || isNaN(v)) return 'flat';
+  return v > 0 ? 'up' : v < 0 ? 'down' : 'flat';
+}
+function fmtShares(n) {
+  if (n === null || n === undefined) return '—';
+  const a = Math.abs(n);
+  if (a >= 1e9) return (n / 1e9).toFixed(2).replace(/\.?0+$/, '') + 'B';
+  if (a >= 1e6) return (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M';
+  if (a >= 1e3) return (n / 1e3).toFixed(0) + 'K';
+  return String(n);
+}
+function fmtSigned(n) { return n ? (n > 0 ? '+' : '−') + fmtShares(Math.abs(n)) : '0'; }
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function parseDay(d) { const [y, m, dd] = d.split('-').map(Number); return new Date(Date.UTC(y, m - 1, dd)); }
+function fmtDay(d) { if (!d) return '—'; const x = parseDay(d); return x.getUTCDate() + ' ' + MONTHS[x.getUTCMonth()]; }
+function fmtDayLong(d) {
+  if (!d) return '—';
+  const x = parseDay(d);
+  return x.getUTCDate() + ' ' + MONTHS[x.getUTCMonth()] + ' ' + x.getUTCFullYear();
+}
+function timeAgo(iso) {
+  if (!iso) return '--';
+  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+  if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+  return Math.floor(diff / 86400) + 'd ago';
+}
+function clockTime(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+function probColor(p) {
+  if (p >= 30) return 'var(--buy)';
+  if (p >= 18) return 'var(--accent)';
+  if (p >= 10) return 'var(--mega)';
+  return 'var(--text-secondary)';
+}
+
+// ── URL state ─────────────────────────────────────────────────────
+function readState() {
+  const q = new URLSearchParams(location.search);
+  if (RANGES[q.get('range')]) state.range = q.get('range');
+  if (['7', '10', '14', '30'].includes(q.get('days'))) state.days = q.get('days');
+}
+function writeState() {
+  const q = new URLSearchParams({ range: state.range, days: state.days });
+  history.replaceState(null, '', location.pathname + '?' + q.toString());
+}
+
+// ── data ──────────────────────────────────────────────────────────
+async function load() {
+  clearTimeout(pendingTimer);
+  try {
+    const url = `/api/top-mover?days=${encodeURIComponent(state.days)}`
+      + `&news_days=${NEWS_DAYS}&runners=4`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    payload = await res.json();
+  } catch (err) {
+    document.getElementById('feed-status').textContent = 'dashboard API error: ' + err.message;
+    document.getElementById('pulse').className = 'pulse off';
+    return;
+  }
+  renderAll();
+  const priceStatus = payload.pick && payload.pick.price_status;
+  if (priceStatus === 'pending' || (payload.no_price || []).some(p => p.status === 'pending')) {
+    pendingTimer = setTimeout(load, 8000);
+  }
+}
+
+// ── status + stats ────────────────────────────────────────────────
+function renderStatus() {
+  const feed = payload.price_feed || {};
+  const pulse = document.getElementById('pulse');
+  const el = document.getElementById('feed-status');
+  const banner = document.getElementById('banner');
+  const ttlMin = Math.round((feed.ttl_secs || 600) / 60);
+  const bursa = feed.market_open ? 'bursa open' : 'bursa closed';
+  const pick = payload.pick;
+
+  let bannerText = (payload.warnings || []).join(' · ');
+  if (feed.cooldown_until) {
+    pulse.className = 'pulse warn';
+    el.textContent = `Yahoo cooldown until ${clockTime(feed.cooldown_until)} · cached prices`;
+    bannerText = `Yahoo rate-limited this server, so price fetching is paused until ${clockTime(feed.cooldown_until)}. The pick is ranked on the last cached bars.`;
+  } else if (pick) {
+    pulse.className = 'pulse';
+    el.textContent = `prices ${timeAgo(pick.price_fetched_at)} · ${bursa} · refresh ≤${ttlMin}m`;
+  } else {
+    pulse.className = 'pulse warn';
+    el.textContent = `${bursa} · no priced candidate`;
+  }
+  banner.textContent = bannerText;
+  banner.style.display = bannerText ? 'block' : 'none';
+
+  document.getElementById('source-line').innerHTML =
+    `prices: ${esc(feed.source || 'Yahoo Finance')} · cached ≤${ttlMin}m per stock · `
+    + `insider data: Bursa filings · news: scored headlines (last ${NEWS_DAYS}d) · `
+    + `universe ${payload.universe.shortlist}/${payload.universe.total} priced · `
+    + `generated ${clockTime(payload.generated_at)}`;
+}
+
+function renderStats() {
+  const u = payload.universe || {};
+  const ranked = payload.ranked || [];
+  const probs = ranked.map(c => c.probability_pct).filter(v => v !== null);
+  const median = probs.length
+    ? probs.slice().sort((a, b) => a - b)[Math.floor(probs.length / 2)] : null;
+  const top = ranked.length ? ranked[0] : null;
+  const feed = payload.price_feed || {};
+  const priced = ranked.length + (payload.no_price || []).length;
+  const feedLabel = feed.cooldown_until ? 'cooldown'
+    : !ranked.length ? '—'
+    : ranked.length === priced ? 'ok' : `${ranked.length}/${priced}`;
+  const feedClass = feed.cooldown_until || ranked.length < priced
+    ? 'color:var(--mega)' : 'color:var(--accent)';
+
+  document.getElementById('stats-row').innerHTML = `
+    <div class="stat-card"><div class="stat-label">insider-active (${payload.params.insider_days}d)</div>
+      <div class="stat-value">${u.insider ?? '—'}</div></div>
+    <div class="stat-card"><div class="stat-label">in headlines (${payload.params.news_days}d)</div>
+      <div class="stat-value">${u.news_names ?? '—'}</div></div>
+    <div class="stat-card"><div class="stat-label">shortlist priced</div>
+      <div class="stat-value small">${ranked.length}/${u.shortlist ?? '—'}</div></div>
+    <div class="stat-card"><div class="stat-label">median probability</div>
+      <div class="stat-value">${median === null ? '—' : median.toFixed(1) + '%'}</div></div>
+    <div class="stat-card"><div class="stat-label">event</div>
+      <div class="stat-value small">≥${payload.threshold_pct.toFixed(1)}% day</div></div>
+    <div class="stat-card"><div class="stat-label">price feed</div>
+      <div class="stat-value small" style="${feedClass}">${feedLabel}</div></div>
+  `;
+  document.getElementById('thr-note').textContent = payload.threshold_pct.toFixed(1);
+}
+
+// ── hero ──────────────────────────────────────────────────────────
+function gaugeHtml(pct) {
+  const r = 50, c = 2 * Math.PI * r;
+  const filled = Math.max(0, Math.min(100, pct)) / 100 * c;
+  const color = probColor(pct);
+  return `<div class="gauge">
+    <svg width="118" height="118" viewBox="0 0 118 118" aria-hidden="true">
+      <circle cx="59" cy="59" r="${r}" fill="none" stroke="#1e2433" stroke-width="9"/>
+      <circle cx="59" cy="59" r="${r}" fill="none" stroke="${color}" stroke-width="9"
+        stroke-linecap="round" stroke-dasharray="${filled} ${c - filled}"/>
+    </svg>
+    <div class="gauge-center">
+      <b style="color:${color}">${pct.toFixed(0)}<span style="font-size:13px">%</span></b>
+      <span>next-session<br>≥${payload.threshold_pct.toFixed(0)}% move</span>
+    </div>
+  </div>`;
+}
+
+function confidenceChip(c) {
+  const map = { high: 'hi', medium: 'warn', low: 'dim' };
+  return `<span class="chip ${map[c] || 'dim'}">${esc(c)} confidence</span>`;
+}
+
+function renderHero() {
+  const slot = document.getElementById('hero-slot');
+  const p = payload.pick;
+  if (!p) {
+    const why = (payload.no_price || []).length
+      ? `${payload.no_price.length} candidate(s) had no price data — check the Yahoo status or try again shortly.`
+      : 'No insider-active or news-mentioned stock in this window.';
+    slot.innerHTML = `<div class="empty-state">nothing to rank right now<br>
+      <span style="font-size:11.5px">${esc(why)}</span></div>`;
+    return;
+  }
+  const f = p.features;
+  const ins = p.insider;
+  const sources = [ins ? 'insider' : null, p.news_mentions ? 'headlines' : null]
+    .filter(Boolean).join(' + ');
+  const candles = f.day_chg_pct;
+  const reasons = (p.reasons || []).map(r =>
+    `<span class="reason">${esc(r.text)} <b>×${r.factor.toFixed(2)}</b></span>`).join('');
+
+  slot.innerHTML = `
+  <div class="hero">
+    <div class="hero-top">
+      <div class="hero-main">
+        ${gaugeHtml(p.probability_pct)}
+        <div class="hero-id">
+          <div class="eyebrow">highest-probability mover${sources ? ' · ' + esc(sources) : ''}</div>
+          <div class="hero-name"><span class="code">${esc(p.stock_code)}</span>${esc(p.company_name || p.symbol)}</div>
+          <div class="hero-meta">
+            <span>${esc(p.sector || '—')}</span>
+            <span class="muted">${esc(p.symbol)}</span>
+            ${confidenceChip(p.confidence)}
+            <span class="chip dim">${esc(p.price_status)}</span>
+            ${ins ? `<span class="chip ${ins.direction === 'buy' ? 'hi' : ''}">insider ${ins.score}/10 · net ${esc(ins.direction)}</span>` : ''}
+            ${p.news_mentions ? `<span class="chip hi">${p.news_mentions} headline${p.news_mentions === 1 ? '' : 's'}</span>` : ''}
+          </div>
+        </div>
+      </div>
+      <div class="hero-price">
+        <div class="px">RM ${fmtPrice(f.last)}</div>
+        <div class="chg ${pctClass(candles)}">${fmtPct(candles)} <span class="muted tiny">· ${fmtDay(f.as_of)}</span></div>
+      </div>
+    </div>
+
+    <div class="eq">
+      <span>own 1y base rate <b>${p.base_rate_pct.toFixed(1)}%</b></span>
+      <span class="arrow">×</span>
+      <span>today's conditions <b>${p.multiplier.toFixed(2)}</b></span>
+      <span class="arrow">=</span>
+      <span>probability <b style="color:${probColor(p.probability_pct)}">${p.probability_pct.toFixed(1)}%</b></span>
+      ${p.expected_abs_move_pct !== null ? `<span class="muted">· typical move size ±${p.expected_abs_move_pct.toFixed(2)}%</span>` : ''}
+    </div>
+    <div class="reasons">${reasons || '<span class="reason">no unusual conditions — this is the calmest candidate</span>'}</div>
+  </div>`;
+}
+
+// ── chart ─────────────────────────────────────────────────────────
+function renderChartShell() {
+  const p = payload.pick;
+  const slot = document.getElementById('chart-slot');
+  if (!p) { slot.innerHTML = ''; return; }
+  if (!document.getElementById('chart')) {
+    slot.innerHTML = `
+    <div class="chart-card">
+      <div class="chart-head">
+        <div class="chart-title">${esc(p.symbol)} · daily bars</div>
+        <div class="range-toggle" id="range-toggle" role="group" aria-label="chart range">
+          ${Object.keys(RANGES).map(r =>
+            `<button data-range="${r}" aria-pressed="${r === state.range}">${r}</button>`).join('')}
+        </div>
+      </div>
+      <svg id="chart" viewBox="0 0 1000 340" preserveAspectRatio="none" role="img"
+           aria-label="candlestick chart"></svg>
+      <div class="chart-note" id="chart-note"></div>
+    </div>`;
+    document.querySelectorAll('#range-toggle button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        state.range = btn.dataset.range;
+        writeState();
+        document.querySelectorAll('#range-toggle button').forEach(b =>
+          b.setAttribute('aria-pressed', b.dataset.range === state.range ? 'true' : 'false'));
+        drawChart();
+      });
+    });
+  }
+  drawChart();
+}
+
+function niceTicks(lo, hi, count) {
+  const span = hi - lo || 1;
+  const step0 = span / count;
+  const mag = Math.pow(10, Math.floor(Math.log10(step0)));
+  const norm = step0 / mag;
+  const step = (norm >= 5 ? 10 : norm >= 2 ? 5 : norm >= 1 ? 2 : 1) * mag;
+  const first = Math.ceil(lo / step) * step;
+  const ticks = [];
+  for (let v = first; v <= hi + step * 1e-6; v += step) ticks.push(+v.toFixed(6));
+  return ticks;
+}
+
+function drawChart() {
+  const p = payload.pick;
+  const svg = document.getElementById('chart');
+  if (!svg || !p) return;
+  const all = p.bars || [];
+  const n = RANGES[state.range] || 66;
+  const bars = all.slice(-n);
+  const note = document.getElementById('chart-note');
+  if (!bars.length) {
+    svg.innerHTML = '';
+    note.textContent = 'no bars for this range';
+    return;
+  }
+
+  const W = 1000, H = 340, padL = 6, padR = 62, padT = 14, padB = 28;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+  const lo = Math.min(...bars.map(b => b.l));
+  const hi = Math.max(...bars.map(b => b.h));
+  const ticks = niceTicks(lo, hi, 4);
+  const yMin = Math.min(lo, ticks[0]), yMax = Math.max(hi, ticks[ticks.length - 1]);
+  const y = v => padT + (yMax - v) / (yMax - yMin || 1) * plotH;
+  const slot = plotW / bars.length;
+  const bw = Math.max(1, Math.min(11, slot * 0.62));
+  const x = i => padL + slot * (i + 0.5);
+
+  let out = '';
+  // grid + price labels
+  ticks.forEach(t => {
+    out += `<line x1="${padL}" x2="${W - padR}" y1="${y(t)}" y2="${y(t)}"
+      stroke="#1c2230" stroke-width="1"/>`;
+    out += `<text x="${W - padR + 8}" y="${y(t) + 3.5}" fill="#565f78"
+      font-family="JetBrains Mono, monospace" font-size="10">${fmtPrice(t)}</text>`;
+  });
+
+  // candles
+  bars.forEach((b, i) => {
+    const up = b.c >= b.o;
+    const colour = up ? '#4ade80' : '#f87171';
+    const cx = x(i);
+    out += `<line x1="${cx}" x2="${cx}" y1="${y(b.h)}" y2="${y(b.l)}"
+      stroke="${colour}" stroke-width="1" opacity="0.75"/>`;
+    const top = y(Math.max(b.o, b.c));
+    const height = Math.max(1, Math.abs(y(b.o) - y(b.c)));
+    out += `<rect x="${cx - bw / 2}" y="${top}" width="${bw}" height="${height}"
+      fill="${colour}" opacity="0.9"/>`;
+  });
+
+  // last close reference line + label
+  const last = bars[bars.length - 1];
+  const lc = last.c;
+  out += `<line x1="${padL}" x2="${W - padR}" y1="${y(lc)}" y2="${y(lc)}"
+    stroke="#4fd1c5" stroke-width="1" stroke-dasharray="5 4" opacity="0.75"/>`;
+  out += `<circle cx="${x(bars.length - 1)}" cy="${y(lc)}" r="3" fill="#4fd1c5"/>`;
+
+  // x labels: ~6 evenly spaced
+  const every = Math.max(1, Math.floor(bars.length / 6));
+  bars.forEach((b, i) => {
+    if (i % every && i !== bars.length - 1) return;
+    out += `<text x="${x(i)}" y="${H - 9}" fill="#565f78" text-anchor="middle"
+      font-family="JetBrains Mono, monospace" font-size="10">${fmtDay(b.t)}</text>`;
+  });
+
+  svg.innerHTML = out;
+  const chg = p.features.chg_5d_pct;
+  note.innerHTML = `${bars.length} bars · ${fmtDayLong(bars[0].t)} → ${fmtDayLong(last.t)} · `
+    + `last <b style="color:#e6e9ef">RM ${fmtPrice(lc)}</b> · 5d ${fmtPct(chg)} · `
+    + `52w ${fmtPrice(p.features.low_1y)} – ${fmtPrice(p.features.high_1y)} · `
+    + `vol ${p.features.vol_ratio_5d ? p.features.vol_ratio_5d.toFixed(1) + '×' : '—'}`;
+}
+
+// ── runners ───────────────────────────────────────────────────────
+function runnerRow(c, i) {
+  const f = c.features;
+  const ins = c.insider;
+  return `<tr>
+    <td class="muted mono">${i + 2}</td>
+    <td class="mono">${esc(c.stock_code)}</td>
+    <td>${esc(c.company_name || '—')}<div class="muted tiny">${esc(c.sector || '')}</div></td>
+    <td>
+      <div class="prob-cell">
+        <span class="mono" style="color:${probColor(c.probability_pct)}">${c.probability_pct.toFixed(1)}%</span>
+        <span class="prob-bar"><i style="width:${Math.min(100, c.probability_pct * 2)}%;background:${probColor(c.probability_pct)}"></i></span>
+      </div>
+    </td>
+    <td class="mono muted">${c.base_rate_pct.toFixed(1)}% × ${c.multiplier.toFixed(2)}</td>
+    <td class="mono">${c.expected_abs_move_pct !== null ? '±' + c.expected_abs_move_pct.toFixed(2) + '%' : '—'}</td>
+    <td class="mono">${fmtPrice(f.last)}</td>
+    <td class="mono ${pctClass(f.day_chg_pct)}">${fmtPct(f.day_chg_pct)}</td>
+    <td class="mono ${pctClass(f.chg_5d_pct)}">${fmtPct(f.chg_5d_pct)}</td>
+    <td class="mono">${esc(c.news_mentions || 0)}</td>
+    <td class="mono">${ins ? ins.score + '/10 · ' + fmtSigned(ins.net_shares) : '—'}</td>
+  </tr>`;
+}
+
+function renderRunners() {
+  const slot = document.getElementById('runners-slot');
+  const title = document.getElementById('runners-title');
+  const rows = payload.runners || [];
+  if (!rows.length) { slot.innerHTML = ''; title.style.display = 'none'; return; }
+  title.style.display = 'block';
+  slot.innerHTML = `
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>#</th><th>code</th><th>company</th><th>probability</th>
+        <th>base × cond.</th><th>typical move</th><th>last</th><th>day</th>
+        <th>5d</th><th>news</th><th>insider</th>
+      </tr></thead>
+      <tbody>${rows.map(runnerRow).join('')}</tbody>
+    </table>
+  </div>`;
+}
+
+function renderAll() {
+  renderStatus();
+  renderStats();
+  renderHero();
+  renderChartShell();
+  renderRunners();
+}
+
+readState();
+load();
+setInterval(load, REFRESH_MS);
+{% endraw %}
+</script>
+</body>
+</html>
