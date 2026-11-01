@@ -18,7 +18,7 @@ import argparse
 import os
 import sqlite3
 import sys
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 HERE = Path(__file__).parent
@@ -55,13 +55,22 @@ def check_env():
 def check_deps():
     for mod in ("cloudscraper", "requests", "yfinance"):
         try:
-            __import__(mod)
-            report(True, f"dependency: {mod}")
+            module = __import__(mod)
+            detail = ""
+            if mod == "cloudscraper":
+                try:
+                    from importlib.metadata import version
+                    detail = f"version {version('cloudscraper')}"
+                except Exception:
+                    detail = f"version {getattr(module, '__version__', 'unknown')}"
+            report(True, f"dependency: {mod}", detail)
         except ImportError:
             report(False, f"dependency: {mod}", "pip install " + mod)
 
 
 def check_bursa():
+    """One live probe.  A random managed-challenge 403 is a WARN, not a FAIL:
+    the collector's heartbeat is the authoritative health signal."""
     try:
         import cloudscraper
         scraper = cloudscraper.create_scraper()
@@ -70,9 +79,14 @@ def check_bursa():
             params={"ann_type": "company", "per_page": 1, "page": 1},
             timeout=30,
         )
-        ok = r.status_code == 200
-        report(ok, "Bursa Malaysia API", f"HTTP {r.status_code}"
-               + ("" if ok else " — Cloudflare may be blocking; try again"))
+        if r.status_code == 200:
+            report(True, "Bursa Malaysia API", "HTTP 200")
+        elif r.status_code == 403 and (
+            r.headers.get("cf-mitigated") == "challenge" or "Just a moment" in r.text[:500]
+        ):
+            print(f"{WARN} Bursa Malaysia API — HTTP 403 managed challenge; collector retries/heartbeat decide health")
+        else:
+            report(False, "Bursa Malaysia API", f"HTTP {r.status_code}")
     except Exception as e:
         report(False, "Bursa Malaysia API", str(e))
 
@@ -93,19 +107,44 @@ def check_telegram():
 
 def check_db():
     from collector import DB_PATH
+    from collector_state import (
+        MYT,
+        assess_heartbeat,
+        describe_last_run,
+        is_business_day,
+        load_holidays,
+        load_state,
+        state_path_for,
+    )
+
+    # Primary health signal: did the collector recently fetch page 1?
+    state = load_state(state_path_for(DB_PATH))
+    try:
+        stale_minutes = float(os.environ.get("ANNOUNCEMENTS_STALE_MINUTES", "60"))
+    except ValueError:
+        stale_minutes = 60.0
+    holidays = load_holidays()
+    ok, detail = assess_heartbeat(state, stale_minutes=stale_minutes, holidays=holidays)
+    report(ok, "collector heartbeat", detail)
+    last_outcome = (state.get("last_run") or {}).get("outcome")
+    run_marker = OK if last_outcome == "success" else WARN
+    print(f"{run_marker} collector last run — {describe_last_run(state)}")
+
     if not Path(DB_PATH).exists():
         report(False, "news.db", f"missing at {DB_PATH} — run collector.py first")
         return
-    con = sqlite3.connect(DB_PATH)
+    con = sqlite3.connect(f"file:{Path(DB_PATH).resolve()}?mode=ro", uri=True)
     tables = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     for t in ("bursa_announcements", "bursa_insider_details"):
         report(t in tables, f"db table: {t}")
     if "bursa_announcements" in tables:
         n, latest = con.execute(
             "SELECT COUNT(*), MAX(published_date) FROM bursa_announcements").fetchone()
-        stale = latest < (date.today() - timedelta(days=1)).isoformat() if latest else True
-        print(f"{WARN if stale else OK} announcements — {n} rows, latest {latest}"
-              + (" (stale — is the collector cron running?)" if stale else ""))
+        local_day = datetime.now(MYT).date()
+        closed = not is_business_day(local_day, holidays)
+        note = ("market closed (weekend/holiday); old published_date is normal"
+                if closed else "published_date is secondary; heartbeat is authoritative")
+        print(f"{OK} announcements (secondary) — {n} rows, latest {latest or 'none'}; {note}")
     if "bursa_insider_details" in tables:
         cols = [c[1] for c in con.execute("PRAGMA table_info(bursa_insider_details)")]
         if "delivered" in cols and "alert_ready" in cols:

@@ -1,6 +1,11 @@
-cloudscraper
+cloudscraper==1.2.71
 requests
 yfinance>=1.5.2
 # for the i_report filter (ireport_filter.py)
 pandas
 pandas-ta-classic
+
+# Optional browser challenge solver (OFF by default):
+#   pip install selenium
+# and install a matching Chromium + chromedriver pair.
+# Enable with ANNOUNCEMENTS_BROWSER_SOLVER=1.
