@@ -1,0 +1,20 @@
+{
+  "_comment": "Bursa Malaysia (XKLS) non-trading weekdays. Verify against the official Bursa trading calendar each year. Add ad-hoc closures here or via BURSA_HOLIDAYS=YYYY-MM-DD,... without a code change.",
+  "_source": "exchange_calendars XKLS sessions, checked 2026-11-01",
+  "holidays": [
+    "2026-01-01",
+    "2026-02-02",
+    "2026-02-17",
+    "2026-02-18",
+    "2026-03-23",
+    "2026-05-01",
+    "2026-05-27",
+    "2026-06-01",
+    "2026-06-17",
+    "2026-08-25",
+    "2026-08-31",
+    "2026-09-16",
+    "2026-11-09",
+    "2026-12-25"
+  ]
+}
