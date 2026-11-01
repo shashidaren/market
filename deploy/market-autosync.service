@@ -1,0 +1,19 @@
+[Unit]
+Description=market autosync (commit server edits, pull, push to GitHub)
+Documentation=file:///opt/market/HANDOFF.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/market
+ExecStart=/opt/market/autosync.sh
+# A failed run must not spin: the timer decides when to retry.
+TimeoutStartSec=300
+Nice=10
+IOSchedulingClass=idle
+
+# Keep the output in the journal:
+#   journalctl -u market-autosync.service -n 50
+StandardOutput=journal
+StandardError=journal

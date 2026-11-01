@@ -77,6 +77,20 @@ case $? in
     *) FAIL+=("collector/scorer") ;;
 esac
 
+# ── 2b. company registry (tickers.py / data/*.json) ─────────
+banner "company registry"
+if python3 tickers.py check --brief 2>/dev/null; then
+    PASS+=("company registry")
+else
+    echo "[FAIL] company registry invalid — run: python3 tickers.py check"
+    FAIL+=("company registry")
+fi
+if [[ -f "$SCRIPT_DIR/data/bursa_tickers.json" ]] \
+   && ! git -C "$SCRIPT_DIR" ls-files --error-unmatch data/bursa_tickers.json >/dev/null 2>&1; then
+    echo "[WARN] data/bursa_tickers.json is UNTRACKED — it will not reach GitHub"
+    WARN+=("tickers data untracked")
+fi
+
 # ── 3. systemd services ─────────────────────────────────────
 banner "systemd services"
 if command -v systemctl >/dev/null 2>&1; then
@@ -136,7 +150,7 @@ if command -v curl >/dev/null 2>&1; then
         echo "[FAIL] dashboard not responding on :5000 (HTTP ${code:-none})"
         FAIL+=("dashboard")
     fi
-    # movers tab: page only (no Yahoo call). 404 = service still running old code.
+    # movers / top tabs: page only (no Yahoo call). 404 = old code still running.
     code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 http://localhost:5000/movers 2>/dev/null)
     if [[ "$code" == "200" ]]; then
         echo "[ OK ] movers tab — http://localhost:5000/movers"
@@ -144,6 +158,14 @@ if command -v curl >/dev/null 2>&1; then
     else
         echo "[WARN] movers tab not served (HTTP ${code:-none}) — systemctl restart market-dashboard"
         WARN+=("movers tab")
+    fi
+    code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 http://localhost:5000/top 2>/dev/null)
+    if [[ "$code" == "200" ]]; then
+        echo "[ OK ] top mover tab — http://localhost:5000/top"
+        PASS+=("top mover tab")
+    else
+        echo "[WARN] top mover tab not served (HTTP ${code:-none}) — systemctl restart market-dashboard"
+        WARN+=("top mover tab")
     fi
 fi
 # the movers tab fetches prices with yfinance under the service's interpreter
@@ -153,6 +175,39 @@ if /usr/bin/python3 -c "import yfinance" 2>/dev/null; then
 else
     echo "[WARN] yfinance missing for /usr/bin/python3 — movers tab can't fetch prices (/usr/bin/python3 -m pip install yfinance)"
     WARN+=("movers yfinance")
+fi
+
+# ── 6. autosync (server <-> GitHub) ─────────────────────────
+banner "autosync (server <-> GitHub)"
+AUTOSYNC_STATE=""
+if command -v systemctl >/dev/null 2>&1 \
+   && systemctl list-unit-files 2>/dev/null | grep -q "^market-autosync.timer"; then
+    AUTOSYNC_STATE=$(systemctl is-active market-autosync.timer 2>/dev/null)
+    if [[ "$AUTOSYNC_STATE" == "active" ]]; then
+        echo "[ OK ] systemd timer market-autosync.timer — active"
+        PASS+=("autosync timer")
+    else
+        echo "[FAIL] market-autosync.timer — $AUTOSYNC_STATE (systemctl start market-autosync.timer)"
+        FAIL+=("autosync timer")
+    fi
+elif command -v crontab >/dev/null 2>&1 && crontab -l 2>/dev/null | grep -q "autosync.sh"; then
+    echo "[ OK ] autosync cron entry — installed"
+    PASS+=("autosync cron")
+else
+    echo "[WARN] autosync not scheduled — run: ./deploy/install_autosync.sh"
+    WARN+=("autosync not installed")
+fi
+
+if [[ -f "$SCRIPT_DIR/autosync.sh" ]]; then
+    GIT_DIR_ABS=$(git -C "$SCRIPT_DIR" rev-parse --absolute-git-dir 2>/dev/null)
+    if [[ -n "$GIT_DIR_ABS" && -f "$GIT_DIR_ABS/market-autosync.conflict" ]]; then
+        echo "[WARN] autosync PAUSED after a conflict — resolve, then ./autosync.sh --clear-conflict"
+        WARN+=("autosync conflict marker")
+    fi
+    if git -C "$SCRIPT_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null | grep -qv "^main$"; then
+        echo "[WARN] checkout is not on main ($(git -C "$SCRIPT_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null)) — autosync will skip"
+        WARN+=("not on main")
+    fi
 fi
 
 # ── Summary ─────────────────────────────────────────────────
