@@ -17,6 +17,7 @@ from pathlib import Path
 from flask import Flask, jsonify, render_template, request
 
 import insider_movers
+import top_mover
 
 DB_PATH = Path(__file__).parent / "news.db"
 
@@ -313,6 +314,36 @@ def api_movers():
     return jsonify(insider_movers.build_payload(leaders, days, limit, rank))
 
 
+
+
+# ═══════════════════════════════════════════════════════════════
+# TOP MOVER ROUTE — the single highest-probability mover
+# ═══════════════════════════════════════════════════════════════
+
+@app.route("/top")
+def top_page():
+    return render_template("top.html")
+
+
+@app.route("/api/top-mover")
+def api_top_mover():
+    """
+    One pick + runners-up, each with a probability of a large move.
+
+        /api/top-mover?days=10&news_days=2&shortlist=12&runners=4
+
+    Universe = insider-active stocks + news-mentioned stocks (hybrid),
+    trimmed to a shortlist so the shared Yahoo quota stays intact. Prices
+    use the same TTL cache as /api/movers, so overlapping names are fetched
+    once. See top_mover.py for the scoring method.
+    """
+    config = top_mover.parse_params(request.args)
+    conn = get_conn()
+    try:
+        payload = top_mover.build_payload(conn, config)
+    finally:
+        conn.close()  # don't hold the DB while waiting on Yahoo
+    return jsonify(payload)
 
 
 if __name__ == "__main__":
