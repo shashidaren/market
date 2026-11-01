@@ -81,7 +81,8 @@ case "$MODE" in
             ok "unit files removed"
         fi
         if cron_installed; then
-            crontab -l 2>/dev/null | grep -vF "$CRON_MARK" | grep -vF "autosync.sh" | crontab -
+            crontab -l 2>/dev/null | grep -vF "$CRON_MARK" \
+                | grep -vF "$REPO/autosync.sh" | crontab -
             ok "cron entry removed"
         fi
         echo "autosync is off. Your repo is untouched."
@@ -110,8 +111,11 @@ fi
 "$REPO/autosync.sh" --status
 
 if [[ "$HAS_SYSTEMD" == "1" ]]; then
-    install -m 644 "$SCRIPT_DIR/$SERVICE" "$UNIT_DIR/$SERVICE"
-    install -m 644 "$SCRIPT_DIR/$TIMER"   "$UNIT_DIR/$TIMER"
+    # The unit files use /opt/market; rewrite them for this checkout so the
+    # installer works from any path (e.g. a home-directory deploy).
+    sed "s#/opt/market#$REPO#g" "$SCRIPT_DIR/$SERVICE" >"$UNIT_DIR/$SERVICE"
+    sed "s#/opt/market#$REPO#g" "$SCRIPT_DIR/$TIMER"   >"$UNIT_DIR/$TIMER"
+    chmod 644 "$UNIT_DIR/$SERVICE" "$UNIT_DIR/$TIMER"
     systemctl daemon-reload
     systemctl enable --now "$TIMER"
     ok "systemd timer enabled — every 5 minutes"
