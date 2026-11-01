@@ -18,7 +18,7 @@ from pathlib import Path
 
 from rapidfuzz import fuzz
 
-from tickers_config import BURSA_TICKERS, MACRO_KEYWORDS
+from tickers import get_registry
 
 DB_PATH = Path(__file__).parent / "news.db"
 BATCH_LIMIT = 200
@@ -54,44 +54,23 @@ def init_scored_table(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
-def _compile_patterns(lookup: dict) -> list:
-    """Builds (compiled_regex, value) pairs with word-boundary matching,
-    so short aliases/keywords (e.g. 'Fed', 'TM', 'MISC') can't match as
-    substrings inside unrelated words (e.g. 'Federal', 'Estimate')."""
-    patterns = []
-    for key, value in lookup.items():
-        pattern = re.compile(r"\b" + re.escape(key) + r"\b", re.IGNORECASE)
-        patterns.append((pattern, value))
-    return patterns
-
-
-_TICKER_PATTERNS = _compile_patterns(BURSA_TICKERS)
-_MACRO_PATTERNS = _compile_patterns(MACRO_KEYWORDS)
+_REGISTRY = get_registry()
 
 
 def classify_relevance_and_sector(text: str):
     """Rule-based relevance/sector/ticker detection.
 
-    Checks ticker aliases first (more specific), falls back to macro
-    keywords, defaults to noise. Word-boundary matched to avoid false
-    positives like 'Fed' matching inside 'Federal'. Returns
-    (relevance, sector, tickers) where tickers are canonical names,
-    deduplicated even if multiple aliases for the same company matched.
+    Delegates to `tickers.Registry.classify()`: the company registry in
+    `data/bursa_tickers.json` derives every alias (name, legal name,
+    legal name without "Bhd", stock code) and drops ambiguous ones, so
+    this file no longer carries the company list. Word-boundary matching
+    still applies, so 'Fed' cannot match inside 'Federal'.
+
+    Returns (relevance, sector, tickers) where tickers are canonical
+    names, deduplicated even if multiple aliases for the same company
+    matched.
     """
-    matched_tickers = {}  # canonical_name -> sector
-    for pattern, (canonical, sector) in _TICKER_PATTERNS:
-        if pattern.search(text):
-            matched_tickers[canonical] = sector
-
-    if matched_tickers:
-        sector = next(iter(matched_tickers.values()))
-        return "malaysia_direct", sector, list(matched_tickers.keys())
-
-    for pattern, sector in _MACRO_PATTERNS:
-        if pattern.search(text):
-            return "macro_indirect", sector, []
-
-    return "noise", None, []
+    return _REGISTRY.classify(text)
 
 
 _sentiment_pipeline = None
@@ -254,8 +233,9 @@ def main() -> None:
     if unmatched_seen:
         sample = list(unmatched_seen)[:15]
         log.info(
-            "Possible unmatched entities in noise-tagged headlines (review "
-            "for BURSA_TICKERS additions): %s", sample
+            "Possible unmatched entities in noise-tagged headlines — run "
+            "`python3 tickers.py suggest` to rank these across recent "
+            "headlines, then add the real ones: %s", sample
         )
 
     conn.close()
