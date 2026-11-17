@@ -17,6 +17,7 @@ from pathlib import Path
 from flask import Flask, jsonify, render_template, request
 
 import insider_movers
+import institutions
 import top_mover
 
 DB_PATH = Path(__file__).parent / "news.db"
@@ -344,6 +345,41 @@ def api_top_mover():
     finally:
         conn.close()  # don't hold the DB while waiting on Yahoo
     return jsonify(payload)
+
+
+# ═══════════════════════════════════════════════════════════════
+# INSTITUTIONS ROUTE — what EPF / KWAP / ASB are buying and selling
+# ═══════════════════════════════════════════════════════════════
+
+@app.route("/institutions")
+def institutions_page():
+    return render_template("institutions.html")
+
+
+@app.route("/api/institutions")
+def api_institutions():
+    """
+    Recent substantial-shareholder (S138) flows of the tracked state-linked
+    funds, newest first. DB only — no Yahoo calls, so this tab never
+    competes with the shared price quota.
+
+        /api/institutions?days=90&fund=EPF,KWAP,ASB&side=all&limit=200
+
+    `fund` accepts the keys from /api/institutions/funds, or "all".
+    """
+    config = institutions.parse_params(request.args)
+    conn = get_conn()
+    try:
+        payload = institutions.build_payload(conn, config)
+    finally:
+        conn.close()
+    return jsonify(payload)
+
+
+@app.route("/api/institutions/funds")
+def api_institutions_funds():
+    """The fund catalog (keys, labels, which are tracked by default)."""
+    return jsonify(institutions.fund_catalog())
 
 
 if __name__ == "__main__":

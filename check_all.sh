@@ -167,6 +167,16 @@ if command -v curl >/dev/null 2>&1; then
         echo "[WARN] top mover tab not served (HTTP ${code:-none}) — systemctl restart market-dashboard"
         WARN+=("top mover tab")
     fi
+    # institutions: DB only, so the API answering 200 also proves the S138
+    # tables are readable by the service user.
+    code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 http://localhost:5000/api/institutions 2>/dev/null)
+    if [[ "$code" == "200" ]]; then
+        echo "[ OK ] institutions tab — http://localhost:5000/institutions"
+        PASS+=("institutions tab")
+    else
+        echo "[WARN] institutions tab not served (HTTP ${code:-none}) — systemctl restart market-dashboard"
+        WARN+=("institutions tab")
+    fi
 fi
 # the movers tab fetches prices with yfinance under the service's interpreter
 if /usr/bin/python3 -c "import yfinance" 2>/dev/null; then
