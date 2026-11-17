@@ -1,7 +1,11 @@
 # HANDOFF — shashidaren/market
 
-_Last updated 2026-11-01 (session `arena/9332580f-market`). Start here in any
+_Last updated 2026-11-17 (session `arena/127976d3-market`). Start here in any
 new session on this repo._
+
+**2026-11-17 session added one tab (§3a): `/institutions` — what EPF, KWAP and
+Amanah Saham Bumiputera are buying or selling, newest filing first. It reads
+the existing S138 tables; no new cron job, no Yahoo calls.**
 
 Three things landed in this session:
 
@@ -22,7 +26,7 @@ Three things landed in this session:
 | This session | branch `arena/9332580f-market` → PR (ticker registry, `/top` tab, autosync) |
 | Server | `/opt/market`, logged in as **root**, **`sudo` is not installed** |
 | Dashboard | systemd `market-dashboard` → `/usr/bin/python3 /opt/market/app.py`, port 5000, runs as root |
-| Tabs | `/` news · `/insider` · `/movers` · `/top` (new) |
+| Tabs | `/` news · `/insider` · `/movers` · `/top` · `/institutions` (new) |
 | gold-watcher | **RETIRED 2026-09-25** — see `gold-watcher/README.md` |
 
 ### First things to do on the server
@@ -37,8 +41,8 @@ git push origin main
 python3 tickers.py check                   # expect: [ OK ] registry is valid
 
 # 2. tests (no network needed)
-python3 -m py_compile app.py insider_movers.py yahoo_client.py top_mover.py tickers.py
-python3 -m unittest test_tickers.py test_top_mover.py test_insider_movers.py test_yahoo_client.py
+python3 -m py_compile app.py insider_movers.py yahoo_client.py top_mover.py tickers.py institutions.py
+python3 -m unittest test_tickers.py test_top_mover.py test_insider_movers.py test_yahoo_client.py test_institutions.py
 ./test_autosync.sh                         # 24 checks in throwaway repos
 cd announcements_signal && python3 -m unittest test_telegram_bot.py && cd ..
 
@@ -48,7 +52,7 @@ systemctl restart market-dashboard
 
 # 4. health check
 ./check_all.sh
-#   expect new lines: company registry · top mover tab · autosync timer
+#   expect new lines: company registry · top mover tab · institutions tab · autosync timer
 
 # 5. turn on autosync (needs the server to be able to push to GitHub)
 git ls-remote origin >/dev/null && echo "push credentials OK"
@@ -189,6 +193,80 @@ python3 top_mover.py --json > /tmp/top.json
 
 ---
 
+## 3a. `/institutions` — what the big funds are buying / selling
+
+Added 2026-11-17. Answers the question the other tabs do not: **EPF / KWAP /
+Amanah Saham Bumiputera just filed — which stock, which way, how many shares?**
+
+`institutions.py` + `templates/institutions.html` + `GET /api/institutions`
+(+ `GET /api/institutions/funds`). The page shows, newest first:
+
+1. **Most recent filings** — trade date, fund, side, shares, stock, RM value
+   (only when the filing states a per-share price), stake after.
+2. **Fund cards** — net bought/sold per fund, its top buy and top sell, and
+   its three latest filings.
+3. **By stock** — the combined net flow of the selected funds per counter.
+4. **Unmatched filers** — S138 names outside the catalog, i.e. the list that
+   says "add this fund".
+
+### Where the data comes from (no new job)
+
+The announcements pipeline already stores Section 138 filings in
+`bursa_announcements` + `bursa_insider_details`, with the **filer** in
+`person_name`. `/institutions` reads only `SUBSTANTIAL_S138` rows and matches
+that name against the fund catalog in `institutions.py`. Director (S219)
+filings are ignored — those are individuals. **No Yahoo calls**, so the tab
+never competes with the shared price quota.
+
+### Fund matching rules
+
+| Rule | Why |
+|---|---|
+| Long phrases match anywhere (`AMANAH SAHAM BUMIPUTERA`, `KUMPULAN WANG PERSARAAN`) | filer names carry "…(Diperbadankan)", "Berhad", trustee phrasing |
+| Short codes are anchored (`^ASB$`, `\bKWAP\b`) | "ASB Resources Sdn Bhd" and "ASBESTOS Holdings" must not become ASB |
+| ASB also matches `AMANAH SAHAM NASIONAL` / `ASNB` | the S138 filer for ASB units is the manager, ASNB |
+| Catalog has 10 funds, 3 tracked by default | EPF, KWAP, ASB chips on; PNB, Khazanah, Tabung Haji, LTAT, Urusharta Jamaah, ValueCap, MOF Inc available |
+
+Add a fund: one `Fund(...)` record in `institutions.py` (key, label,
+full_name, tracked, patterns) — the chips and API pick it up automatically.
+The tab's "unmatched filers" table shows what is being missed.
+
+### Honesty rules baked in
+
+- **Per-share price only.** `parse_detail.py` sets
+  `price_per_share = clean_float(consideration)`, which on an S138 form can be
+  the TOTAL ("RM1,250,000"). `institutions.per_share_price()` accepts a number
+  only when it is ≤ RM150; otherwise the feed shows `n/a` and the raw text on
+  hover. Never invent a valuation.
+- **Dedupe** by (fund, stock, date, side, shares) so a re-filed/corrected
+  notice counts once — but the same trade filed by two different funds is kept.
+- **Gaps are possible**: the collector pages through recent announcements, so a
+  very busy day can leave holes. The tab's notes say so.
+
+### API / CLI
+
+```
+GET /api/institutions?days=90&fund=EPF,KWAP,ASB&side=all&limit=200   # or fund=all
+GET /api/institutions/funds                                         # catalog
+```
+
+```bash
+python3 institutions.py                    # human-readable report
+python3 institutions.py --days 30 --fund EPF,KWAP --side buy
+python3 institutions.py --json > /tmp/inst.json
+```
+
+Env knob: `INSTITUTIONS_DAYS` (default window, 7–730; the page selector and
+`?days=` still win). See `.env.example`.
+
+### Tests
+
+`python3 -m unittest test_institutions.py -v` — 34 tests: matching (incl. the
+"ASB Resources" false-positive case), price sanity, param clamps, dedupe,
+side/fund filters, stock board, missing tables, and the Flask routes + nav.
+
+---
+
 ## 4. Autosync (server ↔ GitHub)
 
 ### What it does
@@ -273,6 +351,12 @@ Existing suites still pass: `test_insider_movers.py`, `test_yahoo_client.py`,
 The sandbox has no access to Yahoo/Bursa, so these use synthetic bars and a
 fake cache. Verify live data on the server with `python3 top_mover.py`.
 
+**2026-11-17 fix:** `test_top_mover.DB.add_insider()` hard-coded `day="2026-10-28"`,
+so once that date fell outside the 10-day insider window six tests failed on
+`main` with an empty universe. The fixture now defaults to
+`date.today() - 2 days`. If a date-pinned fixture ever fails again, make it
+relative instead of moving the date forward.
+
 ---
 
 ## 6. Previous session (2026-09-25) — still relevant
@@ -328,6 +412,12 @@ fake cache. Verify live data on the server with `python3 top_mover.py`.
   replace the hand-set multiplier weights with fitted ones. Until then the tab
   is a ranking aid. A first step is a daily cron writing
   `(date, code, probability, threshold, next_day_move)` to a small table.
+- **`/institutions` coverage.** The catalog covers the state-linked funds, not
+  every institutional holder (foreign custodians, insurance funds, GLCs).
+  Watch the tab's "unmatched filers" list and add records to
+  `institutions.py` as they matter. Also worth doing: parse the
+  `circumstances` text to split "open market" from "off market / direct
+  business" flows on the fund cards.
 - **Fill registry gaps.** `python3 tickers.py suggest --days 14` weekly; the
   current 35 code-less entries (EPF, FBM indices, foreign peers) are intentional.
 - **Bursa official listing sync.** The JSON could be refreshed from Bursa's
@@ -349,8 +439,8 @@ fake cache. Verify live data on the server with `python3 top_mover.py`.
   the server.
 - **Server routine after pulling**:
   ```bash
-  python3 -m py_compile app.py insider_movers.py yahoo_client.py top_mover.py tickers.py
-  python3 -m unittest test_tickers.py test_top_mover.py test_insider_movers.py test_yahoo_client.py
+  python3 -m py_compile app.py insider_movers.py yahoo_client.py top_mover.py tickers.py institutions.py
+  python3 -m unittest test_tickers.py test_top_mover.py test_insider_movers.py test_yahoo_client.py test_institutions.py
   systemctl restart market-dashboard
   ./check_all.sh
   ```

@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>market // institutional flows</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap');
+
+  :root {
+    --bg: #0b0e14;
+    --surface: #131722;
+    --surface-hover: #171c29;
+    --border: #232838;
+    --text-primary: #e6e9ef;
+    --text-secondary: #8b93a7;
+    --text-muted: #565f78;
+    --accent: #4fd1c5;
+    --accent-dim: #2a5f5a;
+    --buy: #4ade80;
+    --sell: #f87171;
+    --mega: #fbbf24;
+    --violet: #a78bfa;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text-primary);
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+  }
+
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 20px 32px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+  .title span { color: var(--accent); }
+
+  .nav { display: flex; gap: 4px; font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+  .nav a {
+    color: var(--text-secondary);
+    text-decoration: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    transition: all 0.12s;
+  }
+  .nav a:hover { color: var(--text-primary); background: var(--surface); }
+  .nav a.active { color: var(--accent); background: var(--accent-dim); }
+
+  .status {
+    display: flex; align-items: center; gap: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+  .pulse {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--accent);
+    animation: pulse 2s infinite;
+  }
+  .pulse.warn { background: var(--mega); animation: none; }
+  .pulse.off { background: var(--sell); animation: none; }
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(79, 209, 197, 0.5); }
+    70% { box-shadow: 0 0 0 8px rgba(79, 209, 197, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(79, 209, 197, 0); }
+  }
+
+  main { max-width: 1220px; margin: 0 auto; padding: 28px 32px 60px; }
+
+  .banner {
+    background: #1d1a0f;
+    border: 1px solid #4a3a12;
+    color: #f3d38a;
+    font-size: 12.5px;
+    line-height: 1.5;
+    padding: 10px 14px;
+    border-radius: 6px;
+    margin-bottom: 18px;
+  }
+
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px;
+    margin-bottom: 22px;
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 13px 15px;
+  }
+  .stat-label {
+    font-size: 10.5px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 5px;
+  }
+  .stat-value { font-family: 'JetBrains Mono', monospace; font-size: 19px; font-weight: 600; }
+  .stat-value.small { font-size: 13.5px; padding-top: 3px; }
+  .stat-sub { font-size: 10.5px; color: var(--text-muted); margin-top: 3px; }
+
+  /* ── filters ──────────────────────────────────────────────── */
+  .filter-bar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 18px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  select {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    padding: 6px 10px;
+    border-radius: 5px;
+  }
+  .toggle { display: flex; gap: 2px; }
+  .toggle button {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .toggle button:hover { color: var(--text-primary); background: var(--surface-hover); }
+  .toggle button[aria-pressed="true"] {
+    color: var(--accent); border-color: var(--accent-dim); background: var(--accent-dim);
+  }
+  .toggle button[data-side="buy"][aria-pressed="true"] {
+    color: var(--buy); border-color: #235c39; background: #14301f;
+  }
+  .toggle button[data-side="sell"][aria-pressed="true"] {
+    color: var(--sell); border-color: #5c2323; background: #301414;
+  }
+
+  .chip-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 20px; }
+  .chip-btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11.5px;
+    padding: 5px 11px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all 0.12s;
+  }
+  .chip-btn:hover { color: var(--text-primary); border-color: var(--text-muted); }
+  .chip-btn[aria-pressed="true"] {
+    color: var(--accent);
+    border-color: var(--accent-dim);
+    background: var(--accent-dim);
+  }
+  .chip-btn .n {
+    color: var(--text-muted);
+    margin-left: 6px;
+    font-size: 10.5px;
+  }
+  .chip-btn[aria-pressed="true"] .n { color: var(--accent); opacity: 0.75; }
+  .chip-actions {
+    background: transparent;
+    border: 1px dashed var(--border);
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 5px 11px;
+    border-radius: 999px;
+    cursor: pointer;
+  }
+  .chip-actions:hover { color: var(--text-primary); border-color: var(--text-muted); }
+
+  /* ── fund cards ───────────────────────────────────────────── */
+  .fund-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+    gap: 12px;
+    margin-bottom: 26px;
+  }
+  .fund-card {
+    background: linear-gradient(180deg, #141a26 0%, var(--surface) 100%);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 15px 16px;
+    position: relative;
+    overflow: hidden;
+  }
+  .fund-card.empty { opacity: 0.65; }
+  .fund-head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    gap: 10px; margin-bottom: 4px;
+  }
+  .fund-name { font-size: 15px; font-weight: 600; }
+  .fund-full {
+    font-size: 10.5px; color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+    margin-bottom: 10px; line-height: 1.45;
+  }
+  .fund-net {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 2px;
+  }
+  .fund-net.none { color: var(--text-muted); font-size: 14px; }
+  .fund-flow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-bottom: 10px;
+  }
+  .fund-flow b { color: var(--text-primary); font-weight: 600; }
+  .fund-latest { border-top: 1px dashed var(--border); padding-top: 8px; }
+  .fund-latest-item {
+    display: flex; gap: 7px; align-items: baseline;
+    font-size: 11.5px;
+    padding: 2px 0;
+    line-height: 1.45;
+  }
+  .fund-latest-item .d {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px; color: var(--text-muted);
+    flex: 0 0 46px;
+  }
+  .fund-latest-item .nm { color: var(--text-secondary); overflow-wrap: anywhere; }
+  .fund-latest-item a { color: inherit; text-decoration: none; }
+  .fund-latest-item a:hover { color: var(--text-primary); text-decoration: underline; }
+  .fund-note {
+    font-size: 10.5px; color: var(--text-muted);
+    margin-top: 8px; line-height: 1.5;
+  }
+
+  /* ── sections ─────────────────────────────────────────────── */
+  .section-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    margin: 26px 0 10px;
+    display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  }
+  .section-title .hint {
+    text-transform: none; letter-spacing: 0; font-size: 10.5px; color: var(--text-muted);
+  }
+
+  /* ── feed ─────────────────────────────────────────────────── */
+  .feed { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .feed-head, .feed-row {
+    display: grid;
+    grid-template-columns: 92px 104px 62px 118px 1fr 86px 96px;
+    gap: 12px;
+    align-items: center;
+    padding: 9px 14px;
+    font-size: 12.5px;
+  }
+  .feed-head {
+    background: #10141d;
+    border-bottom: 1px solid var(--border);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+  }
+  .feed-row { border-bottom: 1px solid #1a1f2c; }
+  .feed-row:last-child { border-bottom: none; }
+  .feed-row:hover { background: var(--surface-hover); }
+  .feed-row .num, .feed-head .num { text-align: right; }
+  .feed-row .c { text-align: center; }
+  .feed-head .c { text-align: center; }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+  .d-cell { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; }
+  .d-cell small { display: block; color: var(--text-muted); font-size: 10px; }
+  .fund-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 1px 8px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+  }
+  .side {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    font-weight: 600;
+    border-radius: 4px;
+    padding: 2px 7px;
+    display: inline-block;
+  }
+  .side.buy  { color: var(--buy);  background: #14301f; border: 1px solid #235c39; }
+  .side.sell { color: var(--sell); background: #301414; border: 1px solid #5c2323; }
+  .stock-cell { min-width: 0; }
+  .stock-cell .co { overflow-wrap: anywhere; }
+  .stock-cell .co a { color: inherit; text-decoration: none; }
+  .stock-cell .co a:hover { color: var(--accent); }
+  .sub { font-size: 10.5px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; }
+  .buy { color: var(--buy); }
+  .sell { color: var(--sell); }
+  .flat { color: var(--text-secondary); }
+  .muted { color: var(--text-muted); }
+  .tiny { font-size: 11px; }
+
+  .empty-state {
+    text-align: center;
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    padding: 46px 12px;
+    background: var(--surface);
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    line-height: 1.9;
+  }
+
+  /* ── stock board table ────────────────────────────────────── */
+  .table-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow-x: auto;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th, td { padding: 9px 12px; text-align: right; white-space: nowrap; }
+  th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: left; }
+  thead th {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    font-weight: 500;
+    border-bottom: 1px solid var(--border);
+    background: #10141d;
+  }
+  tbody tr { border-bottom: 1px solid #1a1f2c; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: var(--surface-hover); }
+  .who { display: flex; gap: 5px; flex-wrap: wrap; justify-content: flex-end; }
+
+  .source-line {
+    margin-top: 18px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    color: var(--text-muted);
+    line-height: 1.7;
+  }
+
+  details.notes {
+    margin-top: 22px;
+    border-top: 1px solid var(--border);
+    padding-top: 14px;
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+  details.notes summary { cursor: pointer; color: var(--text-muted); font-size: 11.5px; }
+  details.notes ul { margin: 10px 0 0; padding-left: 18px; line-height: 1.85; }
+  details.notes code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    background: #0f131d;
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+
+  @media (max-width: 900px) {
+    .feed-head { display: none; }
+    .feed-row {
+      grid-template-columns: 1fr auto;
+      row-gap: 6px;
+      padding: 11px 14px;
+    }
+    .feed-row .d-cell { grid-column: 1 / 2; }
+    .feed-row .side-cell { grid-column: 2 / 3; text-align: right; }
+    .feed-row .fund-cell { grid-column: 1 / 2; }
+    .feed-row .shares-cell { grid-column: 2 / 3; text-align: right; }
+    .feed-row .stock-cell { grid-column: 1 / 3; }
+    .feed-row .val-cell, .feed-row .pct-cell { display: none; }
+  }
+  @media (max-width: 640px) {
+    header { padding: 16px 18px; }
+    main { padding: 20px 18px 48px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="title">market<span>//</span>institutional-flows</div>
+  <div class="nav">
+    <a href="/">news</a>
+    <a href="/insider">insider</a>
+    <a href="/movers">movers</a>
+    <a href="/top">top</a>
+    <a href="/institutions" class="active">institutions</a>
+  </div>
+  <div class="status">
+    <span class="pulse" id="pulse"></span>
+    <span id="feed-status">connecting...</span>
+  </div>
+</header>
+
+<main>
+  <div class="banner" id="banner" style="display:none"></div>
+
+  <div class="stats-row" id="stats-row"></div>
+
+  <div class="filter-bar">
+    <select id="window-filter" aria-label="window">
+      <option value="14">last 14 days</option>
+      <option value="30">last 30 days</option>
+      <option value="90" selected>last 90 days</option>
+      <option value="180">last 6 months</option>
+      <option value="365">last 12 months</option>
+    </select>
+    <div class="toggle" id="side-toggle" role="group" aria-label="side">
+      <button data-side="all" aria-pressed="true">all</button>
+      <button data-side="buy" aria-pressed="false">buying</button>
+      <button data-side="sell" aria-pressed="false">selling</button>
+    </div>
+  </div>
+
+  <div class="chip-row" id="fund-chips"></div>
+
+  <div class="fund-grid" id="fund-grid"></div>
+
+  <div class="section-title">
+    <span>most recent filings</span>
+    <span class="hint" id="feed-hint"></span>
+  </div>
+  <div class="feed" id="feed">
+    <div class="empty-state">loading institutional filings...</div>
+  </div>
+
+  <div class="section-title">
+    <span>by stock — net flow of the selected funds</span>
+    <span class="hint">biggest absolute flow first</span>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>code</th>
+          <th>company</th>
+          <th>funds</th>
+          <th>bought</th>
+          <th>sold</th>
+          <th>net</th>
+          <th>stake after</th>
+          <th>last filing</th>
+        </tr>
+      </thead>
+      <tbody id="stock-body">
+        <tr><td colspan="8" class="muted">—</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div id="unmatched-slot"></div>
+
+  <div class="source-line" id="source-line"></div>
+
+  <details class="notes">
+    <summary>where this data comes from &amp; what it does not mean</summary>
+    <ul>
+      <li><b>Source.</b> Bursa Malaysia <i>Changes in Sub. S-hldr's Int (Section 138)</i> filings, collected by the announcements pipeline into <code>bursa_announcements</code> + <code>bursa_insider_details</code>. The same tables the insider tab reads — <b>no extra cron job, no Yahoo calls</b>.</li>
+      <li><b>Who counts as an institution.</b> The filer name on the filing (<code>person_name</code>) is matched against a small fund catalog: EPF/KWSP, KWAP, Amanah Saham Bumiputera / Amanah Saham Nasional (which file through ASNB), plus PNB, Khazanah, Tabung Haji, LTAT, Urusharta Jamaah, ValueCap and MOF Inc as optional chips. Short codes only match as a whole name, so "ASB Resources Sdn Bhd" is not mistaken for Amanah Saham Bumiputera.</li>
+      <li><b>Most recent first</b> = newest <i>date of change</i> (the trade date), falling back to the filing date. Filings usually land 1–3 days after the trade, so the "filed" line shows the lag.</li>
+      <li><b>Dedupe.</b> Filings are keyed by (fund, stock, date, side, shares) — a re-filed or corrected notice is counted once.</li>
+      <li><b>Values (RM)</b> are only shown when the filing states a per-share price. A filing that quotes a total amount ("RM1,250,000") is not converted, so the number is never invented.</li>
+      <li><b>Gaps are possible.</b> S138 notices are only in this database if the collector saw them; the collector pages through recent announcements, so a very busy day can leave holes. Cross-check on Bursa before acting.</li>
+      <li>Informational only, not investment advice.</li>
+    </ul>
+  </details>
+</main>
+
+<script>
+{% raw %}
+const REFRESH_MS = 5 * 60 * 1000;
+const state = { days: '90', side: 'all', funds: null };   // funds = null → server default
+let catalog = [];
+let payload = null;
+
+// ── formatting ────────────────────────────────────────────────────
+function esc(s) {
+  if (s === null || s === undefined) return '';
+  return String(s).replace(/[<>&"']/g, c => ({
+    '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;'
+  })[c]);
+}
+function fmtShares(n) {
+  if (n === null || n === undefined) return '—';
+  const a = Math.abs(n);
+  if (a >= 1e9) return (n / 1e9).toFixed(2).replace(/\.?0+$/, '') + 'B';
+  if (a >= 1e6) return (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M';
+  if (a >= 1e3) return (n / 1e3).toFixed(0) + 'K';
+  return String(n);
+}
+function fmtSigned(n) {
+  if (!n) return '0';
+  return (n > 0 ? '+' : '−') + fmtShares(Math.abs(n));
+}
+function fmtMoney(v, signed) {
+  if (v === null || v === undefined) return '';
+  const a = Math.abs(v);
+  const sign = v < 0 ? '−' : (signed && v > 0 ? '+' : '');
+  if (a >= 1e9) return sign + 'RM' + (a / 1e9).toFixed(2) + 'b';
+  if (a >= 1e6) return sign + 'RM' + (a / 1e6).toFixed(2) + 'm';
+  if (a >= 1e3) return sign + 'RM' + (a / 1e3).toFixed(0) + 'k';
+  return sign + 'RM' + a.toFixed(0);
+}
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const DOW = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+function parseDay(d) { const [y, m, dd] = d.split('-').map(Number); return new Date(Date.UTC(y, m - 1, dd)); }
+function fmtDay(d) {
+  if (!d) return '—';
+  const x = parseDay(d);
+  return x.getUTCDate() + ' ' + MONTHS[x.getUTCMonth()];
+}
+function fmtDayLong(d) {
+  if (!d) return '—';
+  const x = parseDay(d);
+  return x.getUTCDate() + ' ' + MONTHS[x.getUTCMonth()] + ' ' + x.getUTCFullYear();
+}
+function daysAgo(d) {
+  if (!d) return '';
+  const today = new Date();
+  const utcToday = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
+  const diff = Math.round((utcToday - parseDay(d).getTime()) / 86400000);
+  if (diff <= 0) return 'today';
+  if (diff === 1) return '1d ago';
+  if (diff < 60) return diff + 'd ago';
+  return Math.round(diff / 30) + 'mo ago';
+}
+function pctClass(v) {
+  if (v === null || v === undefined || isNaN(v)) return 'flat';
+  return v > 0 ? 'buy' : v < 0 ? 'sell' : 'flat';
+}
+function signedPct(v) {
+  if (v === null || v === undefined || isNaN(v)) return '—';
+  return (v > 0 ? '+' : '') + v.toFixed(2) + '%';
+}
+function sideBadge(side) {
+  return side === 'buy'
+    ? '<span class="side buy">▲ BUY</span>'
+    : '<span class="side sell">▼ SELL</span>';
+}
+function bursaLink(code) {
+  return `https://www.bursamalaysia.com/trade/trading_resources/listed_securities/listed_securities_search?stock_code=${encodeURIComponent(code)}`;
+}
+
+// ── filters ───────────────────────────────────────────────────────
+function selectedFunds() {
+  if (state.funds) return state.funds;
+  return catalog.filter(f => f.tracked).map(f => f.key);
+}
+
+function renderChips() {
+  const box = document.getElementById('fund-chips');
+  const chosen = new Set(selectedFunds());
+  const counts = {};
+  for (const f of (payload && payload.summary) || []) counts[f.key] = f.n_filings;
+
+  box.innerHTML = catalog.map(f => `
+    <button class="chip-btn" data-fund="${esc(f.key)}"
+            aria-pressed="${chosen.has(f.key) ? 'true' : 'false'}"
+            title="${esc(f.full_name)}">
+      ${esc(f.label)}${counts[f.key] !== undefined ? `<span class="n">${counts[f.key]}</span>` : ''}
+    </button>
+  `).join('') + `
+    <button class="chip-actions" data-action="tracked">tracked only</button>
+    <button class="chip-actions" data-action="all">every fund</button>
+  `;
+
+  box.querySelectorAll('button[data-fund]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.fund;
+      const next = new Set(selectedFunds());
+      if (next.has(key)) next.delete(key); else next.add(key);
+      if (!next.size) next.add(key);        // never leave nothing selected
+      state.funds = [...next];
+      refresh();
+    });
+  });
+  box.querySelectorAll('button[data-action]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.funds = btn.dataset.action === 'all'
+        ? catalog.map(f => f.key)
+        : catalog.filter(f => f.tracked).map(f => f.key);
+      refresh();
+    });
+  });
+}
+
+// ── stats ─────────────────────────────────────────────────────────
+function renderStats() {
+  const c = payload.counts || {};
+  const w = payload.window || {};
+  const net = c.net || 0;
+  const el = document.getElementById('stats-row');
+  el.innerHTML = `
+    <div class="stat-card">
+      <div class="stat-label">filings in window</div>
+      <div class="stat-value">${c.filings || 0}</div>
+      <div class="stat-sub">${esc(w.from || '')} → ${esc(w.to || '')}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">net shares</div>
+      <div class="stat-value ${net > 0 ? 'buy' : net < 0 ? 'sell' : ''}">${fmtSigned(net)}</div>
+      <div class="stat-sub">${fmtShares(c.bought || 0)} bought · ${fmtShares(c.sold || 0)} sold</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">stocks touched</div>
+      <div class="stat-value">${c.stocks || 0}</div>
+      <div class="stat-sub">${c.stocks_bought || 0} bought · ${c.stocks_sold || 0} sold</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">latest activity</div>
+      <div class="stat-value small">${payload.last_activity ? fmtDayLong(payload.last_activity) : '—'}</div>
+      <div class="stat-sub">${payload.last_activity ? daysAgo(payload.last_activity) : 'no filings yet'}</div>
+    </div>
+  `;
+}
+
+// ── fund cards ────────────────────────────────────────────────────
+function renderFundCards() {
+  const grid = document.getElementById('fund-grid');
+  const cards = (payload.summary || []).map(f => {
+    if (!f.n_filings) {
+      return `
+        <div class="fund-card empty">
+          <div class="fund-head"><span class="fund-name">${esc(f.label)}</span></div>
+          <div class="fund-full">${esc(f.full_name)}</div>
+          <div class="fund-net none">no S138 filings in this window</div>
+          <div class="fund-note">Either the fund did not change a 5%+ stake, or the
+            announcements collector did not see the notice.</div>
+        </div>`;
+    }
+    const latest = (f.latest || []).map(item => `
+      <div class="fund-latest-item">
+        <span class="d">${esc(fmtDay(item.sort_date))}</span>
+        <span>${sideBadge(item.side)}</span>
+        <span class="nm">
+          ${item.url
+            ? `<a href="${esc(item.url)}" target="_blank" rel="noopener">${esc(item.stock_code)} ${esc(item.company_name || '')}</a>`
+            : `${esc(item.stock_code)} ${esc(item.company_name || '')}`}
+          <span class="mono tiny muted">${fmtShares(item.shares)}</span>
+        </span>
+      </div>
+    `).join('');
+
+    const value = (f.net_value_rm !== null && f.priced_filings)
+      ? `<span class="muted"> · </span><span class="${f.net_value_rm < 0 ? 'sell' : 'buy'}">${esc(fmtMoney(f.net_value_rm, true))}</span><span class="muted"> priced</span>`
+      : '';
+
+    return `
+      <div class="fund-card">
+        <div class="fund-head">
+          <span class="fund-name">${esc(f.label)}</span>
+          <span class="mono tiny ${f.direction === 'buy' ? 'buy' : f.direction === 'sell' ? 'sell' : 'flat'}">
+            ${f.direction === 'buy' ? 'net buying' : f.direction === 'sell' ? 'net selling' : 'flat'}
+          </span>
+        </div>
+        <div class="fund-full">${esc(f.full_name)}</div>
+        <div class="fund-net ${f.direction === 'buy' ? 'buy' : f.direction === 'sell' ? 'sell' : 'none'}">
+          ${fmtSigned(f.net_shares)}
+        </div>
+        <div class="fund-flow">
+          <b>${fmtShares(f.bought)}</b> bought · <b>${fmtShares(f.sold)}</b> sold${value}<br>
+          ${f.n_filings} filings · ${f.n_stocks} stocks · last ${fmtDay(f.last_date)}
+        </div>
+        <div class="fund-latest">${latest || '<span class="muted tiny">—</span>'}</div>
+      </div>`;
+  });
+  grid.innerHTML = cards.join('') ||
+    '<div class="empty-state">no funds selected</div>';
+}
+
+// ── feed ──────────────────────────────────────────────────────────
+function renderFeed() {
+  const feed = payload.recent || [];
+  document.getElementById('feed-hint').textContent =
+    `${payload.recent_total || 0} filing(s)` +
+    (payload.recent_total > feed.length ? ` · showing ${feed.length}` : '');
+
+  const box = document.getElementById('feed');
+  if (!feed.length) {
+    box.innerHTML = `<div class="empty-state">no institutional filings match these filters<br>
+      <span style="font-size:11.5px">try a longer window, or "every fund"</span></div>`;
+    return;
+  }
+
+  const head = `
+    <div class="feed-head">
+      <span>trade date</span>
+      <span>fund</span>
+      <span class="c">side</span>
+      <span class="num">shares</span>
+      <span>stock</span>
+      <span class="num">value</span>
+      <span class="num">stake after</span>
+    </div>`;
+
+  const rows = feed.map(e => {
+    const lag = (e.lag_days !== null && e.lag_days !== undefined && e.lag_days > 0)
+      ? `<small>filed ${esc(e.published_date)} · +${e.lag_days}d</small>`
+      : `<small>filed ${esc(e.published_date || '')}</small>`;
+    const value = e.value_rm !== null && e.value_rm !== undefined
+      ? fmtMoney(e.value_rm)
+      : `<span class="muted" title="${esc(e.consideration || 'no per-share price stated')}">n/a</span>`;
+    const pct = e.pct_after !== null && e.pct_after !== undefined
+      ? `<span class="mono">${e.pct_after.toFixed(2)}%</span>`
+      : '<span class="muted">—</span>';
+    return `
+      <div class="feed-row">
+        <span class="d-cell">${esc(fmtDay(e.trade_date || e.published_date))}
+          <small>${esc(daysAgo(e.trade_date || e.published_date))}</small></span>
+        <span class="fund-cell"><span class="fund-tag" title="${esc(e.person_name || '')}">${esc(e.fund_label)}</span></span>
+        <span class="side-cell c">${sideBadge(e.side)}</span>
+        <span class="shares-cell num mono ${e.side === 'buy' ? 'buy' : 'sell'}">${fmtSigned(e.side === 'buy' ? e.shares : -e.shares)}</span>
+        <span class="stock-cell">
+          <div class="co">
+            <a href="${esc(bursaLink(e.stock_code))}" target="_blank" rel="noopener">
+              <span class="mono">${esc(e.stock_code)}</span> ${esc(e.company_name || '')}
+            </a>
+          </div>
+          <div class="sub">${e.url ? `<a href="${esc(e.url)}" target="_blank" rel="noopener">filing ↗</a>` : 'filing'}</div>
+        </span>
+        <span class="val-cell num mono tiny">${value}</span>
+        <span class="pct-cell num">${pct}</span>
+      </div>`;
+  }).join('');
+
+  box.innerHTML = head + rows;
+}
+
+// ── stock board ───────────────────────────────────────────────────
+function renderStocks() {
+  const body = document.getElementById('stock-body');
+  const stocks = payload.stocks || [];
+  if (!stocks.length) {
+    body.innerHTML = '<tr><td colspan="8" class="muted">no flows to show</td></tr>';
+    return;
+  }
+  body.innerHTML = stocks.map(s => {
+    const funds = (s.funds || []).map(f => `
+      <span class="fund-tag ${f.net > 0 ? 'buy' : f.net < 0 ? 'sell' : ''}"
+            title="${esc(f.label)}: ${fmtSigned(f.net)}">
+        ${esc(f.label)} ${f.net > 0 ? '▲' : f.net < 0 ? '▼' : '·'}
+      </span>`).join('');
+    const pct = s.last_pct_after !== null && s.last_pct_after !== undefined
+      ? s.last_pct_after.toFixed(2) + '%' : '—';
+    return `
+      <tr>
+        <td class="mono">${esc(s.stock_code)}</td>
+        <td><a href="${esc(bursaLink(s.stock_code))}" target="_blank" rel="noopener"
+               style="color:inherit;text-decoration:none">${esc(s.company_name || '')}</a></td>
+        <td><div class="who">${funds}</div></td>
+        <td class="mono buy">${s.bought ? fmtShares(s.bought) : '—'}</td>
+        <td class="mono sell">${s.sold ? fmtShares(s.sold) : '—'}</td>
+        <td class="mono ${s.net_shares > 0 ? 'buy' : s.net_shares < 0 ? 'sell' : 'flat'}"><b>${fmtSigned(s.net_shares)}</b></td>
+        <td class="mono">${pct}</td>
+        <td class="mono tiny muted">${esc(fmtDay(s.last_date))} · ${s.n_filings}</td>
+      </tr>`;
+  }).join('');
+}
+
+// ── unmatched filers ──────────────────────────────────────────────
+function renderUnmatched() {
+  const slot = document.getElementById('unmatched-slot');
+  const items = payload.unmatched || [];
+  if (!items.length) { slot.innerHTML = ''; return; }
+  slot.innerHTML = `
+    <div class="section-title">
+      <span>S138 filers not in the fund catalog</span>
+      <span class="hint">add one to institutions.py when it matters</span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>filer name</th><th>filings</th></tr></thead>
+        <tbody>
+          ${items.map(i => `<tr>
+            <td class="mono tiny">${esc(i.name)}</td>
+            <td class="mono">${i.count}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+// ── load ──────────────────────────────────────────────────────────
+function setStatus(text, cls) {
+  document.getElementById('feed-status').textContent = text;
+  const p = document.getElementById('pulse');
+  p.className = 'pulse' + (cls ? ' ' + cls : '');
+}
+
+async function loadCatalog() {
+  try {
+    const res = await fetch('/api/institutions/funds');
+    catalog = await res.json();
+  } catch (err) {
+    catalog = [];
+  }
+}
+
+async function refresh() {
+  if (!catalog.length) await loadCatalog();
+
+  const params = new URLSearchParams({
+    days: state.days,
+    side: state.side,
+    fund: (state.funds || selectedFunds()).join(','),
+  });
+
+  try {
+    const res = await fetch('/api/institutions?' + params.toString());
+    payload = await res.json();
+  } catch (err) {
+    setStatus('load failed', 'off');
+    document.getElementById('feed').innerHTML =
+      `<div class="empty-state">could not load /api/institutions<br><span style="font-size:11.5px">${esc(err)}</span></div>`;
+    return;
+  }
+
+  const banner = document.getElementById('banner');
+  if (payload.error) {
+    banner.style.display = 'block';
+    banner.textContent = payload.error;
+    setStatus('no data', 'warn');
+  } else {
+    banner.style.display = 'none';
+    const c = payload.counts || {};
+    setStatus(`${c.filings || 0} filings · ${payload.last_activity ? daysAgo(payload.last_activity) : '—'}`, '');
+  }
+
+  renderChips();
+  renderStats();
+  renderFundCards();
+  renderFeed();
+  renderStocks();
+  renderUnmatched();
+
+  const w = payload.window || {};
+  document.getElementById('source-line').innerHTML = [
+    `window ${esc(w.from || '')} → ${esc(w.to || '')} (${esc(String(w.days || state.days))}d)`,
+    `${esc(String((payload.counts || {}).priced_filings || 0))} of ${esc(String((payload.counts || {}).filings || 0))} filings state a usable per-share price`,
+    `${esc(String((payload.counts || {}).duplicates_dropped || 0))} duplicate filing(s) dropped`,
+    `source: Bursa S138 substantial-shareholder notices via announcements_signal`,
+    `refreshed ${new Date().toLocaleTimeString()}`,
+  ].join(' · ');
+}
+
+document.getElementById('window-filter').addEventListener('change', e => {
+  state.days = e.target.value;
+  refresh();
+});
+document.querySelectorAll('#side-toggle button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    state.side = btn.dataset.side;
+    document.querySelectorAll('#side-toggle button').forEach(b =>
+      b.setAttribute('aria-pressed', String(b === btn)));
+    refresh();
+  });
+});
+
+refresh();
+setInterval(refresh, REFRESH_MS);
+{% endraw %}
+</script>
+
+</body>
+</html>

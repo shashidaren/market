@@ -11,6 +11,7 @@ insider-filing pipeline, FX and index signal engines, and a Flask dashboard.
 | `/insider` | insider (director + substantial holder) signals from Bursa filings |
 | `/movers` | top 5 insider-active stocks with 1-year candles and price-vs-insider metrics |
 | `/top` | **one stock**: the highest-probability mover, with the arithmetic and a chart |
+| `/institutions` | what the big funds (EPF, KWAP, Amanah Saham Bumiputera, …) are **buying or selling**, newest S138 filing first |
 
 The dashboard runs on port 5000: `python3 app.py`.
 
@@ -49,7 +50,7 @@ python3 tickers.py suggest --days 7
 ## Tests
 
 ```bash
-python3 -m unittest test_tickers.py test_top_mover.py test_insider_movers.py test_yahoo_client.py
+python3 -m unittest test_tickers.py test_top_mover.py test_insider_movers.py test_yahoo_client.py test_institutions.py
 cd announcements_signal && python3 -m unittest test_telegram_bot.py
 ./test_autosync.sh
 ```

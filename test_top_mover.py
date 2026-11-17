@@ -110,7 +110,10 @@ class DB:
         self._ann = 1000
 
     def add_insider(self, code, *, score=8, shares=500_000, direction="ACQUISITION",
-                    day="2026-10-28", person="TAN AH KOW", company=None):
+                    day=None, person="TAN AH KOW", company=None):
+        # Relative on purpose: a hard-coded date silently falls outside the
+        # 7-10 day window as the calendar moves and the suite starts failing.
+        day = day or (date.today() - timedelta(days=2)).isoformat()
         self._ann += 1
         ann = self._ann
         self.conn.execute(
